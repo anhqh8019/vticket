@@ -38,3 +38,9 @@ Tích hợp cổng thật tiếp theo: tạo giao dịch phía server, xác minh
 ## Ngoài phạm vi v0.1
 
 Chưa có OTP, email/SMS/Zalo, khách đoàn, tích điểm, hóa đơn điện tử, đổi/hủy sau thanh toán, hoàn tiền, thanh toán QR thật, quét camera, quản lý nhân viên CRUD, báo cáo phân trang dài hạn, kiểm soát riêng từng dịch vụ. Chưa tính trẻ em và hạn mức ngày/giờ theo thỏa thuận.
+
+## Bổ sung kho mã và PDF
+
+`ticket_batches` và `ticket_stock` lưu lô, mã gốc, QR token, trạng thái và đơn đang giữ/đã bán. `tickets` bổ sung stockId, ticketCode, batchCode; vé cũ giữ giá trị null. BookingService khóa các sản phẩm theo ID tăng dần trong create/pay/cancel; InventoryService cấp mã nguyên tử. Khi thanh toán, chuyển mã giữ sang SOLD và tạo Ticket theo QR đã có, không sinh mã mới. Check-in cập nhật Ticket và StockCode sang USED trong cùng transaction.
+
+PDFBox xuất A6 theo từng vé, nhúng font DejaVu Sans đã subset Latin/tiếng Việt (license kèm resource). Kiểm thử render PDF và giải mã QR từ ảnh để đối chiếu với token đã cấp. Chi tiết xem TICKET_BATCHES.md. Tích hợp Smile chưa được triển khai.

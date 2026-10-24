@@ -5,11 +5,12 @@ Bản MVP React + Spring Boot 4.0.9 + Java 25 + SQL Server cho bán vé online v
 ## Đã triển khai
 
 - Tạo/sửa/ngừng bán vé, combo, dịch vụ mua thêm; gán dịch vụ bao gồm trong giá vé.
-- Đặt vé online và tại quầy, lưu snapshot giá và thông tin khách.
+- Quản lý lô vé, sinh và theo dõi từng mã: chưa bán, đang giữ, đã bán, đã sử dụng. Dịch vụ không có lô.
+- Đặt vé online và tại quầy, giữ mã từ cùng kho và lưu snapshot giá/thông tin khách.
 - Cấp voucher riêng cho khách quen, giảm % tổng hóa đơn, có thời hạn, chỉ dùng một lần trên cả hai kênh; theo dõi và thu hồi.
 - Giữ voucher theo đơn 15 phút, giải phóng khi hủy/hết hạn; kiểm soát đồng thời bằng khóa database.
 - Thu tiền mặt tại quầy; thanh toán online **giả lập riêng ở profile demo**.
-- Phát QR thật cho từng vé, in/lưu PDF bằng trình duyệt, check-in đúng ngày và chống dùng lại.
+- Phát QR thật từ mã đã giữ, tải file PDF vé có font tiếng Việt (mỗi vé/trang), check-in đúng ngày và chống dùng lại trong vticket. Chưa kết nối cổng Smile PSM.
 - Admin/staff, CSRF, nhật ký, tra cứu đơn bằng mã bí mật, thống kê trên 200 đơn gần nhất.
 
 ## Chạy nhanh để thử giao diện và nghiệp vụ
@@ -114,6 +115,7 @@ Xem [kết quả kiểm tra](docs/VALIDATION.md), [kiến trúc và quy tắc](d
 Backend build và chạy bằng JDK 25. Docker build/runtime và GitHub Actions đều dùng Java 25. Spring Boot 4 dùng starter Web MVC/Flyway/test mới; dữ liệu và migration SQL Server được giữ nguyên.
 
 Sau khi cập nhật code trên Windows:
+
 ```powershell
 git pull origin main
 java -version
@@ -122,4 +124,11 @@ cd backend
 mvn clean verify
 mvn spring-boot:run
 ```
+
 Cả `java -version` và Java version trong `mvn -version` phải hiển thị 25. Nếu Maven còn dùng JDK cũ, chỉnh JAVA_HOME tới thư mục JDK 25 và mở lại terminal. Các biến DB_URL, DB_USERNAME, DB_PASSWORD, ADMIN_PASSWORD và STAFF_PASSWORD giữ cách cấu hình như trên. Nâng Java/Spring Boot không tự xử lý chứng chỉ SQL Server; local tự ký vẫn cần cấu hình trustServerCertificate phù hợp.
+
+## Lô vé và tải PDF
+
+Sau khi nâng cấp, Flyway V2 giữ nguyên vé/đơn cũ và bổ sung kho mã. Vào Quản trị -> Lô vé & mã vé để tạo lô cho từng loại vé trước khi bán. Đơn thiếu mã còn bán sẽ bị từ chối; dịch vụ không cần lô. Vé đã thanh toán từ bản trước vẫn dùng được. Đơn chưa thanh toán từ bản trước cần hủy và tạo lại vì chưa giữ mã từ kho.
+
+Xem [hướng dẫn lô vé và PDF](docs/TICKET_BATCHES.md). Smile sẽ tích hợp sau; QR nội bộ chỉ dùng với màn hình kiểm soát vticket, chưa mở được cổng Smile.

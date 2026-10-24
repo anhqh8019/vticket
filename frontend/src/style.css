@@ -679,3 +679,13 @@ h1 {
     background: white;
   }
 }
+
+a.button {
+  display: inline-block;
+  padding: 13px 20px;
+  border-radius: 8px;
+  background: #23594b;
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+}

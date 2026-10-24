@@ -51,3 +51,26 @@ Cấp voucher:
 ```
 
 Mốc thời gian ISO UTC; frontend datetime-local chuyển theo múi giờ máy người dùng. Ngày dùng vé được kiểm tra theo Asia/Ho_Chi_Minh. Mã voucher do server sinh, không cho sửa % hay chủ sở hữu sau phát hành; thu hồi và tạo mã mới khi cần.
+
+## Lô vé và PDF
+
+| Method   | Path                                                        | Quyền             | Nội dung                             |
+| -------- | ----------------------------------------------------------- | ----------------- | ------------------------------------ |
+| GET/POST | /api/admin/ticket-batches                                   | Admin             | Danh sách thống kê / tạo lô và mã    |
+| GET      | /api/admin/ticket-batches/{id}/codes?state=AVAILABLE&page=0 | Admin             | Lọc mã theo trạng thái, 100 mã/trang |
+| PUT      | /api/admin/ticket-batches/{id}/active                       | Admin             | Bật/tạm dừng lô, body active         |
+| GET      | /api/public/orders/{accessToken}/tickets.pdf                | Có token đơn PAID | Tải PDF thực tế                      |
+
+Body tạo lô:
+
+```json
+{
+  "code": "TAMKHOANG-2026-01",
+  "productId": 3,
+  "quantity": 100,
+  "validFrom": "2026-10-24",
+  "validUntil": "2027-10-24"
+}
+```
+
+Không tạo lô cho SERVICE. Tạo đơn phải có đủ mã của lô đang mở bán và chứa ngày sử dụng. Đơn tối đa 500 vé. PDF chưa hỗ trợ QR Smile; nguồn mã hiện là VTICKET.

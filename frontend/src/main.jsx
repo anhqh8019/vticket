@@ -471,7 +471,7 @@ function OrderView({ d, config, run, busy, refresh }) {
                       alt="QR vé vào cổng"
                     />
                     <p>{t.visitDate}</p>
-                    <code className="break">{t.qrToken}</code>
+                    <code className="break">{t.ticketCode || t.qrToken}</code>
                     <p className="muted">{t.includedServices}</p>
                     <span className="badge">
                       {t.checkedInAt ? "Đã check-in" : "Chưa sử dụng"}
@@ -479,12 +479,18 @@ function OrderView({ d, config, run, busy, refresh }) {
                   </div>
                 ))}
               </div>
-              <button
-                className="secondary no-print"
-                onClick={() => window.print()}
-              >
-                In / Lưu PDF vé
-              </button>
+              <div className="tabs no-print">
+                <a
+                  className="button"
+                  href={`/api/public/orders/${b.accessToken}/tickets.pdf`}
+                  download
+                >
+                  Tải PDF vé ({tickets.length} vé)
+                </a>
+                <button className="secondary" onClick={() => window.print()}>
+                  In vé
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -748,6 +754,7 @@ function Manage({ run, busy, refreshCatalog }) {
         {[
           ["tickets", "Quản lý vé"],
           ["services", "Dịch vụ đi kèm"],
+          ["batches", "Lô vé & mã vé"],
           ["vouchers", "Voucher khách hàng"],
           ["audit", "Nhật ký"],
         ].map(([k, l]) => (
@@ -860,6 +867,9 @@ function Manage({ run, busy, refreshCatalog }) {
           </div>
         </>
       )}
+      {tab === "batches" && (
+        <BatchManager products={products} run={run} busy={busy} />
+      )}
       {tab === "vouchers" && (
         <>
           <div className="row">
@@ -971,6 +981,340 @@ function Manage({ run, busy, refreshCatalog }) {
     </>
   );
 }
+
+function BatchManager({ products, run, busy }) {
+  const [batches, setBatches] = useState([]),
+    [show, setShow] = useState(false),
+    [codes, setCodes] = useState(null),
+    [state, setState] = useState(""),
+    [search, setSearch] = useState("");
+  const labelsStock = {
+    AVAILABLE: "Còn bán",
+    RESERVED: "Đang giữ",
+    SOLD: "Đã bán, chưa dùng",
+    USED: "Đã sử dụng",
+  };
+  const load = () =>
+    run(async () => setBatches(await api("/admin/ticket-batches")));
+  useEffect(() => {
+    load();
+  }, []);
+  const view = (id, filter = "", page = 0) =>
+    run(async () => {
+      setCodes(
+        await api(
+          `/admin/ticket-batches/${id}/codes?${filter ? "state=" + filter + "&" : ""}page=${page}`,
+        ),
+      );
+      setState(filter);
+    });
+  const totals = batches.reduce(
+    (a, b) => {
+      for (const k of Object.keys(labelsStock)) a[k] += b.counts[k] || 0;
+      return a;
+    },
+    { AVAILABLE: 0, RESERVED: 0, SOLD: 0, USED: 0 },
+  );
+  return (
+    <>
+      <div className="row">
+        <div>
+          <h2>Lô vé & kho mã vé</h2>
+          <p>Mỗi mã tương ứng một vé vào cổng. Dịch vụ không quản lý lô.</p>
+        </div>
+        <div className="tabs">
+          <button
+            className="secondary"
+            onClick={() => {
+              load();
+              if (codes) view(codes.batch.id, state, codes.page);
+            }}
+          >
+            Làm mới
+          </button>
+          <button onClick={() => setShow(!show)}>+ Tạo lô vé</button>
+        </div>
+      </div>
+      <p className="muted">
+        Mã nội bộ vticket. Tích hợp Smile PSM sẽ triển khai sau; chưa sử dụng QR
+        này tại cổng Smile.
+      </p>
+      <div className="stats">
+        {[
+          ["Còn bán / chưa bán", totals.AVAILABLE],
+          ["Đang giữ theo đơn", totals.RESERVED],
+          ["Đã bán (gồm đã dùng)", totals.SOLD + totals.USED],
+          ["Đã sử dụng", totals.USED],
+        ].map(([label, value]) => (
+          <div className="panel stat" key={label}>
+            <span className="muted">{label}</span>
+            <strong>{value}</strong>
+          </div>
+        ))}
+      </div>
+      <p className="muted">
+        Thống kê tối đa 200 lô mới nhất; số chưa bán gồm cả mã thuộc lô đã tạm
+        dừng/hết hạn.
+      </p>
+      {show && (
+        <form
+          className="panel"
+          onSubmit={(e) => {
+            e.preventDefault();
+            const f = new FormData(e.currentTarget);
+            run(async () => {
+              await api("/admin/ticket-batches", {
+                method: "POST",
+                body: {
+                  code: f.get("code").trim().toUpperCase(),
+                  productId: Number(f.get("productId")),
+                  quantity: Number(f.get("quantity")),
+                  validFrom: f.get("validFrom"),
+                  validUntil: f.get("validUntil"),
+                },
+              });
+              setShow(false);
+              await load();
+            });
+          }}
+        >
+          <h3>Tạo lô và sinh mã vé</h3>
+          <div className="two-col">
+            <Field
+              label="Mã lô (không trùng)"
+              name="code"
+              placeholder="VD: TAMKHOANG-2026-01"
+              pattern="[A-Za-z0-9_-]+"
+              maxLength={40}
+              required
+            />
+            <label className="field">
+              Loại vé / combo
+              <select name="productId" required defaultValue="">
+                <option value="" disabled>
+                  Chọn loại vé
+                </option>
+                {products
+                  .filter((p) => p.kind !== "SERVICE")
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                      {p.active ? "" : " (đã ngừng bán)"}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <Field
+              label="Số lượng mã trong lô"
+              type="number"
+              name="quantity"
+              min="1"
+              max="10000"
+              step="1"
+              defaultValue="100"
+              required
+            />
+            <Field
+              label="Ngày sử dụng từ"
+              type="date"
+              name="validFrom"
+              defaultValue={today()}
+              required
+            />
+            <Field
+              label="Ngày sử dụng đến hết"
+              type="date"
+              name="validUntil"
+              min={today()}
+              required
+            />
+          </div>
+          <p className="muted">
+            Mã sinh theo mã lô và số thứ tự. Giá bán được lấy từ danh mục loại
+            vé; thời hạn là khoảng ngày khách được dùng vé.
+          </p>
+          <div className="tabs">
+            <button disabled={busy}>Tạo lô vé</button>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setShow(false)}
+            >
+              Đóng
+            </button>
+          </div>
+        </form>
+      )}
+      <div className="panel">
+        <Field
+          label="Tìm lô / loại vé"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Mã lô / Loại vé</th>
+                <th>Thời hạn sử dụng</th>
+                <th>Tổng mã</th>
+                <th>Chưa bán</th>
+                <th>Đang giữ</th>
+                <th>Đã bán</th>
+                <th>Đã dùng</th>
+                <th>Trạng thái</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {batches
+                .filter(({ batch: b, productName }) =>
+                  `${b.code} ${productName}`
+                    .toLowerCase()
+                    .includes(search.toLowerCase()),
+                )
+                .map(({ batch: b, productName, counts: c }) => (
+                  <tr key={b.id}>
+                    <td>
+                      <b>{b.code}</b>
+                      <small>{productName}</small>
+                    </td>
+                    <td>
+                      {b.validFrom}
+                      <small>đến {b.validUntil}</small>
+                    </td>
+                    <td>{b.quantity}</td>
+                    <td>{c.AVAILABLE}</td>
+                    <td>{c.RESERVED}</td>
+                    <td>{c.SOLD + c.USED}</td>
+                    <td>{c.USED}</td>
+                    <td>
+                      {b.validUntil < today()
+                        ? "Hết hạn"
+                        : b.active
+                          ? "Đang mở bán"
+                          : "Tạm dừng"}
+                    </td>
+                    <td>
+                      <button
+                        className="secondary compact"
+                        onClick={() => view(b.id)}
+                      >
+                        Xem mã
+                      </button>
+                      <button
+                        disabled={busy}
+                        className="secondary compact"
+                        onClick={() =>
+                          run(async () => {
+                            await api(`/admin/ticket-batches/${b.id}/active`, {
+                              method: "PUT",
+                              body: { active: !b.active },
+                            });
+                            await load();
+                          })
+                        }
+                      >
+                        {b.active ? "Tạm dừng" : "Mở bán"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {codes && (
+        <div className="panel">
+          <div className="row">
+            <div>
+              <h2>Mã vé trong lô {codes.batch.code}</h2>
+              <p className="muted">
+                {codes.total} mã theo bộ lọc. Mỗi trang tối đa 100 mã.
+              </p>
+            </div>
+            <button className="secondary" onClick={() => setCodes(null)}>
+              Đóng danh sách
+            </button>
+          </div>
+          <label className="field">
+            Lọc trạng thái
+            <select
+              value={state}
+              onChange={(e) => view(codes.batch.id, e.target.value, 0)}
+            >
+              <option value="">Tất cả trạng thái</option>
+              {Object.entries(labelsStock).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="tablewrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Mã vé</th>
+                  <th>Trạng thái</th>
+                  <th>Đơn liên quan</th>
+                  <th>Thời điểm</th>
+                </tr>
+              </thead>
+              <tbody>
+                {codes.items.map((c) => (
+                  <tr key={c.id}>
+                    <td>
+                      <code>{c.code}</code>
+                    </td>
+                    <td>
+                      <span className="badge">{labelsStock[c.state]}</span>
+                    </td>
+                    <td className="break">
+                      {c.soldOrderId || c.reservedOrderId || "—"}
+                    </td>
+                    <td>
+                      {c.usedAt
+                        ? "Đã dùng: " +
+                          new Date(c.usedAt).toLocaleString("vi-VN")
+                        : c.soldAt
+                          ? "Đã bán: " +
+                            new Date(c.soldAt).toLocaleString("vi-VN")
+                          : c.reservedUntil
+                            ? "Giữ đến: " +
+                              new Date(c.reservedUntil).toLocaleString("vi-VN")
+                            : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="tabs">
+            <button
+              className="secondary"
+              disabled={busy || codes.page === 0}
+              onClick={() => view(codes.batch.id, state, codes.page - 1)}
+            >
+              ← Trước
+            </button>
+            <span>
+              Trang {codes.totalPages ? codes.page + 1 : 0}/{codes.totalPages}
+            </span>
+            <button
+              className="secondary"
+              disabled={busy || codes.page + 1 >= codes.totalPages}
+              onClick={() => view(codes.batch.id, state, codes.page + 1)}
+            >
+              Sau →
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 function ProductForm({ product, products, busy, close, save, catalogType }) {
   const [kind, K] = useState(
       product?.kind || (catalogType === "services" ? "SERVICE" : "TICKET"),

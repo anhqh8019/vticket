@@ -9,11 +9,11 @@
 
 ## Đã thực hiện
 
-Tách hai màn hình quản trị loại vé/combo và dịch vụ. Mã trong danh mục là mã loại vé, khác với mã riêng của từng vé vào cổng. Dữ liệu hiện có được giữ nguyên.
+Tách hai màn hình quản trị loại vé/combo và dịch vụ. Thêm lô vé nội bộ, theo dõi từng mã và xuất PDF sau thanh toán. Mã trong danh mục là mã loại vé, khác với mã riêng của từng vé vào cổng. Dữ liệu hiện có được giữ nguyên. Xem TICKET_BATCHES.md.
 
 ## Phương án cần xác nhận trước khi lập trình phần tích hợp
 
-Smile PSM đang quản lý mã vé; chưa có tài liệu xác định hệ thống nào tạo lô, cấp mã, giữ mã và xác nhận sử dụng. Không giả định UUID đang sinh trong vticket được cổng Smile chấp nhận. Chưa triển khai kho lô vé hay PDF tích hợp Smile trong lần thay đổi giao diện này.
+Smile PSM đang quản lý mã vé; chưa có tài liệu xác định hệ thống nào tạo lô, cấp mã, giữ mã và xác nhận sử dụng. Không giả định UUID đang sinh trong vticket được cổng Smile chấp nhận. Đã triển khai kho lô vé nội bộ vticket và PDF vé nội bộ; chưa triển khai cấp/đồng bộ mã qua Smile.
 
 Luồng đề xuất để trao đổi: lấy lô/mã từ Smile hoặc tạo qua API được Smile hỗ trợ -> giữ số mã phù hợp cho đơn chờ thanh toán -> xác nhận bán/kích hoạt khi nhận thanh toán -> trả PDF chứa đúng nội dung QR Smile -> cổng kiểm tra và ghi nhận sử dụng -> đồng bộ trạng thái về vticket. Việc giữ/kích hoạt/đồng bộ phụ thuộc khả năng API thực tế.
 

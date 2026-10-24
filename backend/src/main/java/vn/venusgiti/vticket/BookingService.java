@@ -11,14 +11,15 @@ import vn.venusgiti.vticket.Requests.*;
 
 @Service @Transactional
 public class BookingService {
- private final Products products; private final Vouchers vouchers; private final Bookings bookings; private final Tickets tickets; private final Audits audits; private final Clock clock;
- BookingService(Products p,Vouchers v,Bookings b,Tickets t,Audits a,Clock c){products=p;vouchers=v;bookings=b;tickets=t;audits=a;clock=c;}
+ private final Products products; private final Vouchers vouchers; private final Bookings bookings; private final Tickets tickets; private final Audits audits; private final Clock clock; private final InventoryService inventory;
+ BookingService(Products p,Vouchers v,Bookings b,Tickets t,Audits a,Clock c,InventoryService i){products=p;vouchers=v;bookings=b;tickets=t;audits=a;clock=c;inventory=i;}
  static void require(boolean condition,String message){ if(!condition)throw new ResponseStatusException(HttpStatus.CONFLICT,message); }
  static String phone(String value){return value.replaceAll("[ -]","").replaceFirst("^\\+84","0");}
  private Instant now(){return clock.instant();}
  void audit(String actor,String action,String target){Audit a=new Audit();a.happenedAt=now();a.actor=actor;a.action=action;a.target=target;audits.save(a);}
  public Booking create(OrderInput input,Channel channel,String actor){
   require(!input.visitDate().isBefore(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))) ,"Ngày sử dụng đã qua");
+  inventory.lockProducts(input.lines().stream().map(LineInput::productId).toList());
   Booking b=new Booking();b.id=UUID.randomUUID().toString();b.accessToken=UUID.randomUUID().toString();b.customerName=input.customerName().trim();b.phone=phone(input.phone());b.email=input.email();b.visitDate=input.visitDate();b.channel=channel;b.status=Status.PENDING;b.createdAt=now();b.expiresAt=now().plus(Duration.ofMinutes(15));b.soldBy=actor;b.subtotal=BigDecimal.ZERO;
   Set<Long> seen=new HashSet<>();boolean hasTicket=false;
   for(LineInput item:input.lines()){
@@ -28,6 +29,7 @@ public class BookingService {
    b.lines.add(line);b.subtotal=b.subtotal.add(p.price.multiply(BigDecimal.valueOf(item.quantity())));hasTicket|=p.kind!=Kind.SERVICE;
   }
   require(hasTicket,"Đơn cần có ít nhất một vé hoặc combo");
+  inventory.reserve(b);
   if(input.voucherCode()!=null&&!input.voucherCode().isBlank()){
    Voucher v=vouchers.lockCode(input.voucherCode().trim().toUpperCase(Locale.ROOT)).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Voucher không hợp lệ"));
    require(!v.revoked&&v.usedOrderId==null&&!now().isBefore(v.validFrom)&&now().isBefore(v.validUntil)&&v.phone.equals(b.phone),"Voucher không hợp lệ, không đúng khách hoặc đã hết hạn/sử dụng");
@@ -41,13 +43,14 @@ public class BookingService {
   Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));
   if(b.status==Status.PAID)return b;
   require(b.status==Status.PENDING,"Đơn không còn chờ thanh toán");require(now().isBefore(b.expiresAt),"Đơn đã hết thời gian thanh toán");
+  inventory.lockBooking(b);
   if(b.voucherCode!=null){Voucher v=vouchers.lockCode(b.voucherCode).orElseThrow();require(!v.revoked&&v.usedOrderId==null&&b.id.equals(v.reservedOrderId)&&now().isBefore(v.validUntil),"Voucher không còn hợp lệ");v.usedOrderId=b.id;v.usedAt=now();v.reservedOrderId=null;v.reservedUntil=null;}
   b.status=Status.PAID;b.paidAt=now();b.paymentMethod=method;b.paymentReference=reference;
-  for(BookingLine line:b.lines)if(line.kind!=Kind.SERVICE)for(int i=0;i<line.quantity;i++){Ticket t=new Ticket();t.id=UUID.randomUUID().toString();t.qrToken=UUID.randomUUID().toString();t.bookingId=b.id;t.productName=line.name;t.includedServices=line.includedServices;t.visitDate=b.visitDate;tickets.save(t);}
+  inventory.issue(b);
   audit(actor,"PAYMENT_"+method,b.id);return b;
  }
  public Booking cash(String id,String actor){Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));require(b.channel==Channel.COUNTER,"Chỉ xác nhận tiền mặt cho đơn tại quầy");return pay(id,"CASH","CASH-"+id,actor);}
- public Booking cancel(String id,String actor,boolean expired){Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));if(expired&&b.status!=Status.PENDING)return b;require(b.status==Status.PENDING,"Chỉ hủy đơn chưa thanh toán");if(b.voucherCode!=null){Voucher v=vouchers.lockCode(b.voucherCode).orElseThrow();if(b.id.equals(v.reservedOrderId)){v.reservedOrderId=null;v.reservedUntil=null;}}b.status=expired?Status.EXPIRED:Status.CANCELLED;audit(actor,expired?"ORDER_EXPIRED":"ORDER_CANCELLED",id);return b;}
- public Ticket checkIn(String token,String actor){Ticket t=tickets.lockToken(token.trim()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Mã vé không hợp lệ"));require(t.checkedInAt==null,"Vé đã được sử dụng");require(t.visitDate.equals(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))) ,"Vé chỉ sử dụng đúng ngày đã đặt");require(bookings.findById(t.bookingId).orElseThrow().status==Status.PAID,"Đơn chưa thanh toán");t.checkedInAt=now();t.checkedInBy=actor;audit(actor,"CHECK_IN",t.id);return t;}
+ public Booking cancel(String id,String actor,boolean expired){Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));if(expired&&b.status!=Status.PENDING)return b;require(b.status==Status.PENDING,"Chỉ hủy đơn chưa thanh toán");inventory.lockBooking(b);inventory.release(b);if(b.voucherCode!=null){Voucher v=vouchers.lockCode(b.voucherCode).orElseThrow();if(b.id.equals(v.reservedOrderId)){v.reservedOrderId=null;v.reservedUntil=null;}}b.status=expired?Status.EXPIRED:Status.CANCELLED;audit(actor,expired?"ORDER_EXPIRED":"ORDER_CANCELLED",id);return b;}
+ public Ticket checkIn(String token,String actor){Ticket t=tickets.lockTokenOrCode(token.trim(),token.trim().toUpperCase(Locale.ROOT)).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Mã vé không hợp lệ"));require(t.checkedInAt==null,"Vé đã được sử dụng");require(t.visitDate.equals(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))) ,"Vé chỉ sử dụng đúng ngày đã đặt");require(bookings.findById(t.bookingId).orElseThrow().status==Status.PAID,"Đơn chưa thanh toán");inventory.used(t);t.checkedInAt=now();t.checkedInBy=actor;audit(actor,"CHECK_IN",t.id);return t;}
  public List<Ticket> ticketList(String bookingId){return tickets.findByBookingId(bookingId);}
 }

@@ -7,6 +7,7 @@ import java.util.*;
 public final class Domain {
  private Domain() {}
  public enum Kind { TICKET, SERVICE, COMBO }
+ public enum StockState { AVAILABLE, RESERVED, SOLD, USED }
  public enum Channel { ONLINE, COUNTER }
  public enum Status { PENDING, PAID, CANCELLED, EXPIRED }
  @Entity(name="Product") @Table(name="products")
@@ -74,11 +75,42 @@ public final class Domain {
   @Id @Column(length=36) public String id;
   @Column(nullable=false,length=36) public String bookingId;
   @Column(nullable=false,unique=true,length=36) public String qrToken;
+  @Column(length=36) public String stockId;
+  @Column(length=64) public String ticketCode;
+  @Column(length=40) public String batchCode;
   @Column(nullable=false,length=150) public String productName;
   @Column(nullable=false,length=1000) public String includedServices;
   @Column(nullable=false) public LocalDate visitDate;
   public Instant checkedInAt;
   @Column(length=100) public String checkedInBy;
+ }
+
+ @Entity(name="TicketBatch") @Table(name="ticket_batches")
+ public static class TicketBatch {
+  @Id @Column(length=36) public String id;
+  @Column(nullable=false,unique=true,length=40) public String code;
+  @Column(nullable=false) public Long productId;
+  @Column(nullable=false) public int quantity;
+  @Column(nullable=false) public LocalDate validFrom;
+  @Column(nullable=false) public LocalDate validUntil;
+  @Column(nullable=false) public boolean active=true;
+  @Column(nullable=false,length=20) public String source="VTICKET";
+  @Column(nullable=false) public Instant createdAt;
+  @Column(nullable=false,length=100) public String createdBy;
+ }
+ @Entity(name="StockCode") @Table(name="ticket_stock")
+ public static class StockCode {
+  @Id @Column(length=36) public String id;
+  @Column(nullable=false,length=36) public String batchId;
+  @Column(nullable=false) public Long productId;
+  @Column(nullable=false,unique=true,length=64) public String code;
+  @Column(nullable=false,unique=true,length=36) public String qrToken;
+  @Enumerated(EnumType.STRING) @Column(nullable=false,length=16) public StockState state=StockState.AVAILABLE;
+  @Column(length=36) public String reservedOrderId;
+  public Instant reservedUntil;
+  @Column(length=36) public String soldOrderId;
+  public Instant soldAt;
+  public Instant usedAt;
  }
  @Entity(name="Audit") @Table(name="audit_events")
  public static class Audit {
