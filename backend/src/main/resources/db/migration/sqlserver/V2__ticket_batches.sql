@@ -3,7 +3,9 @@ CREATE TABLE ticket_stock (id VARCHAR(36) PRIMARY KEY,batch_id VARCHAR(36) NOT N
 CREATE INDEX ix_stock_allocate ON ticket_stock(product_id,state,batch_id);
 CREATE INDEX ix_stock_reservation ON ticket_stock(reserved_order_id);
 CREATE INDEX ix_stock_batch_state ON ticket_stock(batch_id,state);
+GO
 ALTER TABLE tickets ADD stock_id VARCHAR(36) REFERENCES ticket_stock(id);
 ALTER TABLE tickets ADD ticket_code VARCHAR(64);
 ALTER TABLE tickets ADD batch_code VARCHAR(40);
+GO
 CREATE UNIQUE INDEX ux_tickets_stock ON tickets(stock_id) WHERE stock_id IS NOT NULL;
