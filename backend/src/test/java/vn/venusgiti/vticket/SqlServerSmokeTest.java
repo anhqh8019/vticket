@@ -28,7 +28,7 @@ class SqlServerSmokeTest {
 
  @Autowired PaymentIntents paymentIntents; @Autowired VietQrPaymentService payments;
  @Test void bankCallbackMigratesAndIssuesOnce() throws Exception {
-  Product p=new Product();p.code="BANK-"+UUID.randomUUID();p.name="Vé VietQR SQL Server";p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(100000);products.saveAndFlush(p);
+  Product p=new Product();p.code="BANK-"+UUID.randomUUID().toString().substring(0,20);p.name="Vé VietQR SQL Server";p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(100000);products.saveAndFlush(p);
   var date=LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));inventory.createBatch(new BatchInput("BANK-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(Locale.ROOT),p.id,3,date,date.plusYears(1)),"test");
   var b=service.create(new OrderInput("Khách SQL","0900000000","",date,"",List.of(new LineInput(p.id,2))),Channel.ONLINE,"test");
   PaymentIntent intent=new PaymentIntent();intent.id="SQL"+UUID.randomUUID().toString().replace("-","").substring(0,10).toUpperCase(Locale.ROOT);intent.bookingId=b.id;intent.state=IntentState.READY;intent.amount=b.total;intent.bankCode="MB";intent.bankAccount="000000000000";intent.accountName="SQL TEST";intent.content="VT"+intent.id;intent.createdAt=Instant.now();intent.expiresAt=b.expiresAt;intent.attemptId=UUID.randomUUID().toString();intent.attemptStartedAt=Instant.now();paymentIntents.saveAndFlush(intent);
