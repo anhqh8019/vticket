@@ -34,12 +34,13 @@ public class InventoryService {
   }
  }
  public void release(Booking b){for(var s:stock.reserved(b.id))reset(s);}
- public void issue(Booking b){
+ public boolean reservationValid(Booking b,Instant at){var held=stock.reserved(b.id);Map<Long,Long> counts=new HashMap<>();for(var row:held){if(row.state!=StockState.RESERVED||row.reservedUntil==null||!row.reservedUntil.isAfter(at))return false;counts.merge(row.productId,1L,Long::sum);}return b.lines.stream().filter(l->l.kind!=Kind.SERVICE).allMatch(l->counts.getOrDefault(l.productId,0L)==l.quantity)&&held.size()==b.lines.stream().filter(l->l.kind!=Kind.SERVICE).mapToInt(l->l.quantity).sum();}
+ public void issue(Booking b,Instant at){
   var reserved=stock.reserved(b.id);Map<Long,BookingLine> lines=new HashMap<>();for(var l:b.lines)if(l.kind!=Kind.SERVICE)lines.put(l.productId,l);
   Map<Long,Long> actual=new HashMap<>();for(var s:reserved)actual.merge(s.productId,1L,Long::sum);
   require(lines.entrySet().stream().allMatch(e->actual.getOrDefault(e.getKey(),0L)==e.getValue().quantity)&&reserved.size()==lines.values().stream().mapToInt(l->l.quantity).sum(),"Đơn không còn đủ mã vé đang giữ. Vui lòng hủy đơn và đặt lại.");
-  for(var s:reserved){require(s.state==StockState.RESERVED&&s.reservedUntil.isAfter(clock.instant()),"Mã vé đã hết thời gian giữ");var l=lines.get(s.productId);var batch=batches.findById(s.batchId).orElseThrow();
-   s.state=StockState.SOLD;s.soldOrderId=b.id;s.soldAt=clock.instant();s.reservedOrderId=null;s.reservedUntil=null;
+  for(var s:reserved){require(s.state==StockState.RESERVED&&s.reservedUntil.isAfter(at),"Mã vé đã hết thời gian giữ");var l=lines.get(s.productId);var batch=batches.findById(s.batchId).orElseThrow();
+   s.state=StockState.SOLD;s.soldOrderId=b.id;s.soldAt=at;s.reservedOrderId=null;s.reservedUntil=null;
    Ticket t=new Ticket();t.id=UUID.randomUUID().toString();t.stockId=s.id;t.ticketCode=s.code;t.batchCode=batch.code;t.qrToken=s.qrToken;t.bookingId=b.id;t.productName=l.name;t.includedServices=l.includedServices;t.visitDate=b.visitDate;tickets.save(t);
   }
  }

@@ -35,3 +35,13 @@ interface TicketStock extends JpaRepository<StockCode,String> {
  org.springframework.data.domain.Page<StockCode> findByBatchIdAndStateOrderByCodeAsc(String id,StockState state,org.springframework.data.domain.Pageable page);
  long countByBatchIdAndState(String id,StockState state);
 }
+
+interface PaymentIntents extends JpaRepository<PaymentIntent,String> { Optional<PaymentIntent> findByBookingId(String bookingId); }
+interface PaymentReceipts extends JpaRepository<PaymentReceipt,String> {
+ Optional<PaymentReceipt> findByTransactionId(String id);
+ Optional<PaymentReceipt> findByReceiptKey(String key);
+ List<PaymentReceipt> findTop200ByOrderByReceivedAtDesc();
+}
+interface CallbackLocks extends JpaRepository<PaymentCallbackLock,Integer> {
+ @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select l from PaymentCallbackLock l where l.id=1") PaymentCallbackLock acquire();
+}

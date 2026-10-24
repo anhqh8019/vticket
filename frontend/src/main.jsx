@@ -55,8 +55,8 @@ function App() {
   return (
     <>
       <div className="notice">
-        {config.demoPayment
-          ? "MÔI TRƯỜNG THỬ NGHIỆM · Thanh toán mô phỏng · Không thu tiền thật"
+        {config.vietqrEnabled && config.vietqrEnvironment === "sandbox"
+          ? "VIETQR SANDBOX · Môi trường kiểm thử kết nối"
           : "VENUSGITI · VÉ ĐIỆN TỬ & TRẢI NGHIỆM NGHỈ DƯỠNG"}
       </div>
       <header>
@@ -155,6 +155,16 @@ function App() {
             run={run}
             busy={busy}
             refresh={() => open(detail.order.accessToken)}
+            staff={!!user}
+            onUpdated={(next) =>
+              D((previous) =>
+                previous?.order.id === next.order.id &&
+                previous.order.status === "PAID" &&
+                next.order.status !== "PAID"
+                  ? previous
+                  : next,
+              )
+            }
           />
         )}
         {page === "checkin" && user && <CheckIn run={run} busy={busy} />}
@@ -403,8 +413,39 @@ function Lookup({ open, busy }) {
     </div>
   );
 }
-function OrderView({ d, config, run, busy, refresh }) {
-  const { order: b, tickets } = d;
+function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
+  const { order: b, tickets, payment } = d;
+  const [pollError, setPollError] = useState(false);
+  const expired = Date.parse(b.expiresAt) <= Date.now();
+  useEffect(() => {
+    setPollError(false);
+    if (b.status !== "PENDING") return;
+    let active = true,
+      inFlight = false;
+    const controller = new AbortController();
+    const timer = setInterval(async () => {
+      if (inFlight) return;
+      inFlight = true;
+      try {
+        const next = await api(`/public/orders/${b.accessToken}`, {
+          signal: controller.signal,
+        });
+        if (active) {
+          onUpdated(next);
+          setPollError(false);
+        }
+      } catch {
+        if (active) setPollError(true);
+      } finally {
+        inFlight = false;
+      }
+    }, 3000);
+    return () => {
+      active = false;
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [b.accessToken, b.status]);
   return (
     <>
       <div className="row">
@@ -512,41 +553,150 @@ function OrderView({ d, config, run, busy, refresh }) {
           {b.status === "PENDING" && (
             <>
               <p className="muted">
-                Hạn thanh toán: {new Date(b.expiresAt).toLocaleString("vi-VN")}
+                Hạn thanh toán của đơn:{" "}
+                {new Date(b.expiresAt).toLocaleString("vi-VN")}
               </p>
-              {config.demoPayment ? (
-                <button
-                  disabled={busy}
-                  className="full"
-                  onClick={() =>
-                    run(async () => {
-                      await api(
-                        "/public/orders/" + b.accessToken + "/demo-pay",
-                        { method: "POST" },
-                      );
-                      await refresh();
-                    })
-                  }
-                >
-                  Thanh toán thử nghiệm
-                </button>
-              ) : (
-                <p>
-                  Chưa kết nối cổng thanh toán trực tuyến. Liên hệ quầy để được
-                  hỗ trợ.
+              {pollError && (
+                <p className="muted">
+                  Chưa cập nhật được trạng thái. Có thể bấm Cập nhật trạng thái
+                  bên trái.
                 </p>
+              )}
+              {expired ? (
+                <p className="alert">
+                  Đơn đã hết thời gian thanh toán. Nếu đã chuyển tiền, vui lòng
+                  liên hệ quầy để đối soát.
+                </p>
+              ) : Number(b.total) === 0 ? (
+                <>
+                  <p>Đơn được ưu đãi còn 0 đồng, không cần chuyển khoản.</p>
+                  <button
+                    disabled={busy}
+                    className="full"
+                    onClick={() =>
+                      run(async () => {
+                        await api(
+                          `/public/orders/${b.accessToken}/confirm-zero`,
+                          { method: "POST" },
+                        );
+                        await refresh();
+                      })
+                    }
+                  >
+                    Xác nhận đơn 0 đồng & nhận vé
+                  </button>
+                </>
+              ) : (
+                <>
+                  {payment?.state === "READY" ? (
+                    <div className="payment-qr">
+                      <h3>Chuyển khoản bằng VietQR</h3>
+                      <img
+                        src={`/api/public/orders/${b.accessToken}/vietqr/image`}
+                        alt="QR thanh toán do VietQR cung cấp"
+                        width="260"
+                        height="260"
+                      />
+                      <p>
+                        <b>
+                          {payment.bankCode} ·{" "}
+                          {payment.virtualAccount || payment.bankAccount}
+                        </b>
+                        <br />
+                        {payment.accountName}
+                      </p>
+                      <div className="row">
+                        <span>Số tiền</span>
+                        <b>{money(payment.amount)}</b>
+                      </div>
+                      <p className="muted">
+                        Nội dung: <b className="break">{payment.content}</b>
+                      </p>
+                      <p className="muted">
+                        Quét QR và giữ nguyên số tiền, nội dung. Hệ thống tự xác
+                        nhận khi VietQR báo có; không cần bấm “đã chuyển tiền”.
+                      </p>
+                    </div>
+                  ) : payment?.state === "CREATING" ? (
+                    <p>Đang tạo VietQR, vui lòng chờ…</p>
+                  ) : (
+                    <>
+                      <button
+                        disabled={busy || !config.vietqrEnabled}
+                        className="full"
+                        onClick={() =>
+                          run(async () => {
+                            await api(
+                              `/public/orders/${b.accessToken}/vietqr`,
+                              { method: "POST" },
+                            );
+                            await refresh();
+                          })
+                        }
+                      >
+                        {payment?.state === "FAILED"
+                          ? "Thử tạo lại VietQR"
+                          : "Thanh toán chuyển khoản VietQR"}
+                      </button>
+                      {payment?.message && (
+                        <p className="alert">{payment.message}</p>
+                      )}
+                      {!config.vietqrEnabled && (
+                        <p className="muted">
+                          VietQR chưa được cấu hình. Vui lòng liên hệ quầy.
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {staff &&
+                    b.channel === "COUNTER" &&
+                    b.paymentMethod !== "VIETQR" && (
+                      <button
+                        disabled={busy}
+                        className="secondary full"
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              `Xác nhận đã thu đủ ${money(b.total)} bằng tiền mặt?`,
+                            )
+                          )
+                            run(async () => {
+                              await api(`/staff/orders/${b.id}/cash`, {
+                                method: "POST",
+                              });
+                              await refresh();
+                            });
+                        }}
+                      >
+                        Thu tiền mặt & xuất vé
+                      </button>
+                    )}
+                  {staff &&
+                    b.channel === "COUNTER" &&
+                    b.paymentMethod === "VIETQR" && (
+                      <p className="muted">
+                        Đơn đang chọn VietQR. Nếu cần đổi sang tiền mặt, hủy đơn
+                        chưa thanh toán và tạo lại.
+                      </p>
+                    )}
+                </>
               )}
               <button
                 disabled={busy}
                 className="secondary full"
-                onClick={() =>
-                  run(async () => {
-                    await api("/public/orders/" + b.accessToken + "/cancel", {
-                      method: "POST",
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Hủy đơn chưa thanh toán và trả mã vé về kho?",
+                    )
+                  )
+                    run(async () => {
+                      await api(`/public/orders/${b.accessToken}/cancel`, {
+                        method: "POST",
+                      });
+                      await refresh();
                     });
-                    await refresh();
-                  })
-                }
+                }}
               >
                 Hủy đơn chưa thanh toán
               </button>
@@ -555,9 +705,13 @@ function OrderView({ d, config, run, busy, refresh }) {
           {b.status === "PAID" && (
             <p className="success">
               Đã thanh toán ·{" "}
-              {b.paymentMethod === "DEMO"
-                ? "Giao dịch thử nghiệm"
-                : b.paymentMethod}
+              {b.paymentMethod === "CASH"
+                ? "Tiền mặt"
+                : b.paymentMethod === "VIETQR"
+                  ? "Chuyển khoản VietQR"
+                  : b.paymentMethod === "DEMO"
+                    ? "Giao dịch thử nghiệm cũ"
+                    : b.paymentMethod || "Không phát sinh thu tiền"}
             </p>
           )}
         </aside>
@@ -695,31 +849,36 @@ function Orders({ run, busy, open }) {
                         className="secondary compact"
                         onClick={() => open(b.accessToken)}
                       >
-                        Xem vé
+                        {b.status === "PENDING"
+                          ? "Thanh toán / Xem đơn"
+                          : "Xem vé"}
                       </button>
-                      {b.status === "PENDING" && b.channel === "COUNTER" && (
-                        <button
-                          disabled={busy}
-                          className="compact"
-                          onClick={() => {
-                            if (
-                              window.confirm(
-                                "Xác nhận đã thu đủ " +
-                                  money(b.total) +
-                                  " tiền mặt?",
+                      {b.status === "PENDING" &&
+                        b.channel === "COUNTER" &&
+                        b.paymentMethod !== "VIETQR" &&
+                        Number(b.total) > 0 && (
+                          <button
+                            disabled={busy}
+                            className="compact"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  "Xác nhận đã thu đủ " +
+                                    money(b.total) +
+                                    " tiền mặt?",
+                                )
                               )
-                            )
-                              run(async () => {
-                                await api("/staff/orders/" + b.id + "/cash", {
-                                  method: "POST",
+                                run(async () => {
+                                  await api("/staff/orders/" + b.id + "/cash", {
+                                    method: "POST",
+                                  });
+                                  await load();
                                 });
-                                await load();
-                              });
-                          }}
-                        >
-                          Đã thu tiền mặt
-                        </button>
-                      )}
+                            }}
+                          >
+                            Đã thu tiền mặt
+                          </button>
+                        )}
                     </td>
                   </tr>
                 ))}
@@ -756,6 +915,7 @@ function Manage({ run, busy, refreshCatalog }) {
           ["services", "Dịch vụ đi kèm"],
           ["batches", "Lô vé & mã vé"],
           ["vouchers", "Voucher khách hàng"],
+          ["receipts", "Đối soát VietQR"],
           ["audit", "Nhật ký"],
         ].map(([k, l]) => (
           <button
@@ -870,6 +1030,7 @@ function Manage({ run, busy, refreshCatalog }) {
       {tab === "batches" && (
         <BatchManager products={products} run={run} busy={busy} />
       )}
+      {tab === "receipts" && <PaymentReceipts run={run} />}
       {tab === "vouchers" && (
         <>
           <div className="row">
@@ -978,6 +1139,99 @@ function Manage({ run, busy, refreshCatalog }) {
           </table>
         </div>
       )}
+    </>
+  );
+}
+
+function PaymentReceipts({ run }) {
+  const [rows, setRows] = useState([]),
+    [filter, setFilter] = useState("REVIEW");
+  const load = () =>
+    run(async () => setRows(await api("/admin/payment-receipts")));
+  useEffect(() => {
+    load();
+  }, []);
+  const reasons = {
+    WRONG_AMOUNT: "Số tiền không khớp",
+    WRONG_ACCOUNT: "Tài khoản nhận không khớp",
+    NOT_CREDIT: "Giao dịch ghi nợ",
+    UNKNOWN_ORDER: "Không tìm thấy mã đơn VietQR",
+    INVALID_TRANSACTION_TIME: "Thời gian giao dịch không hợp lệ",
+    CONTENT_MISMATCH: "Nội dung chuyển khoản không khớp",
+    ALREADY_PAID: "Đơn đã được thanh toán",
+    QR_NOT_READY: "QR chưa sẵn sàng",
+    ORDER_EXPIRED: "Đơn hết thời gian thanh toán",
+    ORDER_NOT_PENDING: "Đơn đã hủy/hết hạn/đã thanh toán",
+    PAYMENT_METHOD_CHANGED: "Phương thức thanh toán không khớp",
+    VOUCHER_INVALID: "Voucher không còn hợp lệ",
+    INVENTORY_UNAVAILABLE: "Không còn đủ mã vé đang giữ",
+  };
+  return (
+    <>
+      <div className="row">
+        <div>
+          <h2>Đối soát chuyển khoản VietQR</h2>
+          <p>
+            Giao dịch không khớp được lưu để kiểm tra, không tự phát hành vé.
+          </p>
+        </div>
+        <button className="secondary" onClick={load}>
+          Làm mới
+        </button>
+      </div>
+      <div className="panel">
+        <label className="field">
+          Trạng thái
+          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
+            <option value="REVIEW">Cần đối soát</option>
+            <option value="APPLIED">Đã xác nhận thanh toán</option>
+            <option value="">Tất cả</option>
+          </select>
+        </label>
+        <p className="muted">
+          Tối đa 200 giao dịch gần nhất. Đối chiếu ngân hàng trước khi xử lý
+          hoàn tiền ngoài hệ thống.
+        </p>
+        <div className="tablewrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Thời gian nhận</th>
+                <th>Giao dịch / tham chiếu</th>
+                <th>Mã đơn VietQR</th>
+                <th>Tài khoản</th>
+                <th>Số tiền</th>
+                <th>Kết quả</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows
+                .filter((r) => !filter || r.state === filter)
+                .map((r) => (
+                  <tr key={r.id}>
+                    <td>{new Date(r.receivedAt).toLocaleString("vi-VN")}</td>
+                    <td>
+                      {r.transactionId}
+                      <small>{r.referenceNumber}</small>
+                    </td>
+                    <td>
+                      {r.providerOrderId}
+                      <small>{r.bookingId || "Không tìm thấy đơn"}</small>
+                    </td>
+                    <td>{r.bankAccount}</td>
+                    <td>{money(r.amount)}</td>
+                    <td>
+                      <span className="badge">
+                        {r.state === "APPLIED" ? "Đã xác nhận" : "Cần đối soát"}
+                      </span>
+                      <small>{reasons[r.reason] || r.reason || ""}</small>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </>
   );
 }

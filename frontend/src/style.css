@@ -689,3 +689,16 @@ a.button {
   font-weight: 600;
   text-decoration: none;
 }
+
+.payment-qr {
+  text-align: center;
+  margin-top: 20px;
+}
+.payment-qr img {
+  max-width: 100%;
+  height: auto;
+  background: white;
+}
+.payment-qr .row {
+  font-size: 14px;
+}

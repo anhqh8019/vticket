@@ -8,5 +8,4 @@ spring:
 app:
   admin-password: ${ADMIN_PASSWORD:demo-admin-change-me}
   staff-password: ${STAFF_PASSWORD:demo-staff-change-me}
-  demo-payment: true
   seed-data: true

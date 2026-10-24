@@ -39,17 +39,35 @@ public class BookingService {
   b.discount=b.subtotal.multiply(BigDecimal.valueOf(b.discountPercent)).divide(BigDecimal.valueOf(100),0,RoundingMode.HALF_UP);b.total=b.subtotal.subtract(b.discount);bookings.save(b);audit(actor,"ORDER_CREATED",b.id);return b;
  }
  public Booking getPublic(String token){return bookings.findByAccessToken(token).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));}
- public Booking pay(String id,String method,String reference,String actor){
-  Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));
-  if(b.status==Status.PAID)return b;
-  require(b.status==Status.PENDING,"Đơn không còn chờ thanh toán");require(now().isBefore(b.expiresAt),"Đơn đã hết thời gian thanh toán");
+
+ public record BankSettlement(boolean applied,String reason) {}
+ private String settlementFailure(Booking b,Instant at){
+  if(b.status!=Status.PENDING)return "ORDER_NOT_PENDING";
+  if(!at.isBefore(b.expiresAt))return "ORDER_EXPIRED";
   inventory.lockBooking(b);
-  if(b.voucherCode!=null){Voucher v=vouchers.lockCode(b.voucherCode).orElseThrow();require(!v.revoked&&v.usedOrderId==null&&b.id.equals(v.reservedOrderId)&&now().isBefore(v.validUntil),"Voucher không còn hợp lệ");v.usedOrderId=b.id;v.usedAt=now();v.reservedOrderId=null;v.reservedUntil=null;}
-  b.status=Status.PAID;b.paidAt=now();b.paymentMethod=method;b.paymentReference=reference;
-  inventory.issue(b);
-  audit(actor,"PAYMENT_"+method,b.id);return b;
+  if(b.voucherCode!=null){var v=vouchers.lockCode(b.voucherCode).orElse(null);if(v==null||v.revoked||v.usedOrderId!=null||!b.id.equals(v.reservedOrderId)||!at.isBefore(v.validUntil))return "VOUCHER_INVALID";}
+  if(!inventory.reservationValid(b,at))return "INVENTORY_UNAVAILABLE";
+  return null;
  }
- public Booking cash(String id,String actor){Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));require(b.channel==Channel.COUNTER,"Chỉ xác nhận tiền mặt cho đơn tại quầy");return pay(id,"CASH","CASH-"+id,actor);}
+ private Booking finish(Booking b,String method,String reference,String actor,Instant at){
+  if(b.voucherCode!=null){var v=vouchers.lockCode(b.voucherCode).orElseThrow();v.usedOrderId=b.id;v.usedAt=at;v.reservedOrderId=null;v.reservedUntil=null;}
+  b.status=Status.PAID;b.paidAt=at;b.paymentMethod=method;b.paymentReference=reference;
+  inventory.issue(b,at);audit(actor,method==null?"ZERO_TOTAL_CONFIRMED":"PAYMENT_"+method,b.id);return b;
+ }
+ Booking pay(String id,String method,String reference,String actor){
+  Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));
+  require("VIETQR".equals(method)||("CASH".equals(method)&&b.channel==Channel.COUNTER),"Phương thức thanh toán không hợp lệ");
+  if(b.status==Status.PAID){require(Objects.equals(b.paymentMethod,method),"Đơn đã thanh toán bằng phương thức khác");return b;}
+  Instant at=now();String reason=settlementFailure(b,at);require(reason==null,"Không thể thanh toán đơn: "+reason);return finish(b,method,reference,actor,at);
+ }
+ public BankSettlement tryBankPayment(String id,String reference){
+  var b=bookings.lockId(id).orElseThrow();Instant at=now();
+  if(!"VIETQR".equals(b.paymentMethod))return new BankSettlement(false,"PAYMENT_METHOD_CHANGED");
+  String reason=settlementFailure(b,at);if(reason!=null)return new BankSettlement(false,reason);
+  finish(b,"VIETQR",reference,"vietqr",at);return new BankSettlement(true,null);
+ }
+ public Booking confirmZero(String token){var b=bookings.lockId(getPublic(token).id).orElseThrow();require(b.total.signum()==0,"Đơn vẫn còn tiền cần thanh toán");if(b.status==Status.PAID)return b;var at=now();String reason=settlementFailure(b,at);require(reason==null,"Không xác nhận được đơn: "+reason);return finish(b,null,"ZERO-"+b.id,"guest",at);}
+ public Booking cash(String id,String actor){var b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));require(b.channel==Channel.COUNTER,"Chỉ xác nhận tiền mặt cho đơn tại quầy");require(!"VIETQR".equals(b.paymentMethod),"Đơn đã chọn VietQR. Hủy đơn và tạo lại nếu cần đổi sang tiền mặt.");return pay(id,"CASH","CASH-"+id,actor);}
  public Booking cancel(String id,String actor,boolean expired){Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));if(expired&&b.status!=Status.PENDING)return b;require(b.status==Status.PENDING,"Chỉ hủy đơn chưa thanh toán");inventory.lockBooking(b);inventory.release(b);if(b.voucherCode!=null){Voucher v=vouchers.lockCode(b.voucherCode).orElseThrow();if(b.id.equals(v.reservedOrderId)){v.reservedOrderId=null;v.reservedUntil=null;}}b.status=expired?Status.EXPIRED:Status.CANCELLED;audit(actor,expired?"ORDER_EXPIRED":"ORDER_CANCELLED",id);return b;}
  public Ticket checkIn(String token,String actor){Ticket t=tickets.lockTokenOrCode(token.trim(),token.trim().toUpperCase(Locale.ROOT)).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Mã vé không hợp lệ"));require(t.checkedInAt==null,"Vé đã được sử dụng");require(t.visitDate.equals(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))) ,"Vé chỉ sử dụng đúng ngày đã đặt");require(bookings.findById(t.bookingId).orElseThrow().status==Status.PAID,"Đơn chưa thanh toán");inventory.used(t);t.checkedInAt=now();t.checkedInBy=actor;audit(actor,"CHECK_IN",t.id);return t;}
  public List<Ticket> ticketList(String bookingId){return tickets.findByBookingId(bookingId);}

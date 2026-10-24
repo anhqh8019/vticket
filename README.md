@@ -9,7 +9,7 @@ Bản MVP React + Spring Boot 4.0.9 + Java 25 + SQL Server cho bán vé online v
 - Đặt vé online và tại quầy, giữ mã từ cùng kho và lưu snapshot giá/thông tin khách.
 - Cấp voucher riêng cho khách quen, giảm % tổng hóa đơn, có thời hạn, chỉ dùng một lần trên cả hai kênh; theo dõi và thu hồi.
 - Giữ voucher theo đơn 15 phút, giải phóng khi hủy/hết hạn; kiểm soát đồng thời bằng khóa database.
-- Thu tiền mặt tại quầy; thanh toán online **giả lập riêng ở profile demo**.
+- Thanh toán VietQR qua API và callback; tại quầy hỗ trợ thêm tiền mặt. Sau xác nhận thanh toán, tải PDF QR từng vé.
 - Phát QR thật từ mã đã giữ, tải file PDF vé có font tiếng Việt (mỗi vé/trang), check-in đúng ngày và chống dùng lại trong vticket. Chưa kết nối cổng Smile PSM.
 - Admin/staff, CSRF, nhật ký, tra cứu đơn bằng mã bí mật, thống kê trên 200 đơn gần nhất.
 
@@ -60,7 +60,7 @@ docker compose logs -f backend
 
 Compose tự tạo DB `vticket`, chạy Flyway và có thể nạp danh mục mẫu bằng APP_SEED_DATA=true khi DB trống. SQL Server lưu ở named volume, `docker compose down` giữ dữ liệu. Không dùng `down -v` nếu cần giữ DB.
 
-Compose mặc định **không bật thanh toán giả lập**. Có thể thử bán tại quầy -> tạo đơn -> Đơn hàng -> Đã thu tiền mặt -> Xem vé -> dùng mã QR tại Kiểm soát vé. Online tạo đơn được nhưng chưa thanh toán thật.
+Compose mặc định tắt VietQR cho đến khi cấu hình tài khoản API và callback. Có thể thử bán tiền mặt tại quầy ngay. Để bật chuyển khoản online/tại quầy, xem [hướng dẫn VietQR](docs/VIETQR_SETUP.md). Không còn endpoint thanh toán giả lập, kể cả profile demo.
 
 Các port chỉ bind localhost. Khi triển khai LAN/Internet cần cấu hình reverse proxy, HTTPS và tài khoản DB riêng thay vì SA. `trustServerCertificate=true` trong Compose chỉ phục vụ chứng chỉ tự ký của SQL Server local.
 
@@ -100,13 +100,13 @@ Bộ test tích hợp H2 kiểm tra giảm giá cả vé + dịch vụ, hạn d�
 2. Voucher khách hàng: cấp giảm 15%, nhập số điện thoại và hiệu lực bao trùm hiện tại; sao chép mã.
 3. Online: chọn 2 vé + dịch vụ, nhập đúng số điện thoại và mã. Kiểm tra giảm 15% tổng đơn.
 4. Trước khi thanh toán, thử dùng lại voucher ở quầy: phải bị từ chối đang giữ.
-5. Demo: thanh toán thử, nhận QR từng vé. SQL Server: thử luồng tiền mặt tại quầy.
+5. Tại quầy: xác nhận thu tiền mặt, nhận QR từng vé và tải PDF. Online/VietQR: cấu hình theo VIETQR_SETUP.md, chỉ nhận vé khi callback hợp lệ báo có.
 6. Check-in cùng một QR hai lần: lần sau bị từ chối. QR chỉ vào đúng ngày sử dụng.
 7. Thử lại voucher đã thanh toán: phải bị từ chối. Hủy đơn chưa thanh toán thì voucher dùng lại được.
 
 ## Giới hạn bản đầu
 
-Chưa tích hợp thanh toán ngân hàng/QR thật, email/SMS/Zalo, OTP xác minh số điện thoại, hóa đơn điện tử, hoàn tiền/đổi ngày, quét camera, quản lý nhân viên qua giao diện hoặc báo cáo đầy đủ. Voucher hiện kiểm tra **mã bí mật + số điện thoại khớp**, chưa xác minh chủ số bằng OTP. Các mục này cần hoàn thiện trước vận hành thương mại.
+Chưa có email/SMS/Zalo, OTP xác minh số điện thoại, hóa đơn điện tử, hoàn tiền/đổi ngày, quét camera, quản lý nhân viên qua giao diện hoặc báo cáo đầy đủ. Voucher hiện kiểm tra **mã bí mật + số điện thoại khớp**, chưa xác minh chủ số bằng OTP. Các mục này cần hoàn thiện trước vận hành thương mại.
 
 Xem [kết quả kiểm tra](docs/VALIDATION.md), [kiến trúc và quy tắc](docs/ARCHITECTURE.md), [API](docs/API.md).
 
@@ -132,3 +132,9 @@ Cả `java -version` và Java version trong `mvn -version` phải hiển thị 2
 Sau khi nâng cấp, Flyway V2 giữ nguyên vé/đơn cũ và bổ sung kho mã. Vào Quản trị -> Lô vé & mã vé để tạo lô cho từng loại vé trước khi bán. Đơn thiếu mã còn bán sẽ bị từ chối; dịch vụ không cần lô. Vé đã thanh toán từ bản trước vẫn dùng được. Đơn chưa thanh toán từ bản trước cần hủy và tạo lại vì chưa giữ mã từ kho.
 
 Xem [hướng dẫn lô vé và PDF](docs/TICKET_BATCHES.md). Smile sẽ tích hợp sau; QR nội bộ chỉ dùng với màn hình kiểm soát vticket, chưa mở được cổng Smile.
+
+## Thanh toán VietQR
+
+Khách online chỉ chuyển khoản VietQR; nhân viên bán tại quầy chọn tiền mặt hoặc VietQR. Backend lấy token và tạo QR động từ API VietQR; callback xác thực riêng xác nhận tiền vào, sau đó cấp đúng mã vé đã giữ và mở tải PDF. Không xác nhận từ nút bấm của khách. Flyway V3 bổ sung giao dịch và danh sách đối soát; giữ nguyên dữ liệu cũ.
+
+Cấu hình, URL callback, kiểm tra sandbox và xử lý chuyển khoản sai/hết hạn: [docs/VIETQR_SETUP.md](docs/VIETQR_SETUP.md). Tích hợp Smile PSM vẫn để giai đoạn sau.

@@ -13,7 +13,7 @@ React/Vite -> API Spring Boot 4.0.9 (Java 25) -> SQL Server. Frontend và API c�
 
 ## Trạng thái và giao dịch
 
-PENDING -> PAID hoặc CANCELLED/EXPIRED. Đơn 15 phút, job quét mỗi phút. Dù job chưa chạy, thanh toán vẫn kiểm tra expiresAt; không nhận tiền cho đơn đã quá hạn.
+PENDING -> PAID hoặc CANCELLED/EXPIRED. Đơn 15 phút, job quét mỗi phút. Dù job chưa chạy, thanh toán vẫn kiểm tra expiresAt; không tự xác nhận thanh toán cho đơn đã quá hạn.
 
 Voucher giảm trên tổng vé + dịch vụ, VND làm tròn HALF_UP đến đồng, 1–100%. Một mã/đơn. Khi tạo đơn, khóa ghi voucher để chỉ một đơn giữ được mã. Hết thời gian giữ thì đơn mới có thể giữ lại. Khi thanh toán, khóa đơn rồi voucher, kiểm tra thời hạn và chủ đơn giữ, đánh dấu đã dùng cùng transaction với phát hành vé. Gọi xác nhận lại đơn đã PAID không phát hành trùng. Hủy đơn pending giải phóng voucher nếu đơn đó vẫn sở hữu lượt giữ. Thu hồi voucher đang giữ hoặc đã dùng bị từ chối.
 
@@ -29,15 +29,17 @@ Voucher cần cả mã ngẫu nhiên và số điện thoại khớp. **Chưa x�
 
 ## Thanh toán
 
-Profile mặc định SQL Server: chỉ có xác nhận CASH cho đơn COUNTER, quyền STAFF/ADMIN. Chưa kết nối cổng thanh toán, callback và hoàn tiền.
+ONLINE chỉ VIETQR; COUNTER có CASH (STAFF/ADMIN) hoặc VIETQR. Đơn 0 đồng có xác nhận riêng, không phát sinh giao dịch tiền. Profile demo chỉ thêm H2/dữ liệu mẫu, không có thanh toán giả lập.
 
-Profile `demo`: H2 file, dữ liệu mẫu và endpoint `demo-pay` để thử end-to-end online. Cấu hình `app.demo-payment` mặc định false; không bật ở production. Endpoint giả lập chỉ chạy khi bật rõ ràng. Đơn DEMO có paymentMethod=DEMO, không được coi là doanh thu tiền thật khi chuyển sang khai thác.
+`payment_intents` lưu một giao dịch/đơn, mã provider 13 ký tự, snapshot số tiền/tài khoản, payload QR trả từ API và trạng thái CREATING/READY/FAILED/PAID/CLOSED. Giữ khóa đơn trong transaction ngắn trước/sau HTTP, không giữ khóa database trong khi gọi VietQR. Retry dùng lại mã provider; QR READY không tạo lại. Chọn VietQR khóa lựa chọn tiền mặt; muốn đổi phải hủy đơn pending và tạo lại để tránh nhận tiền hai lần.
 
-Tích hợp cổng thật tiếp theo: tạo giao dịch phía server, xác minh chữ ký callback, tra mã giao dịch với nhà cung cấp và kiểm tra số tiền/tiền tệ/order trước khi gọi BookingService.pay. Không xác nhận thanh toán từ redirect hoặc trình duyệt. Xử lý callback đến muộn bằng đối soát/hoàn tiền, không tự phát vé cho đơn hết hạn.
+Hai chiều xác thực độc lập: vticket gọi token_generate + generate-customer bằng thông tin API VietQR cung cấp; VietQR gọi endpoint token của vticket bằng Basic callback credentials rồi dùng JWT HS256 thời hạn mặc định 300 giây để gọi transaction-sync. Security chain callback tách khỏi HTTP Basic nhân viên và CSRF của ứng dụng. Không tin redirect, ảnh QR hay xác nhận từ trình duyệt.
+
+Callback kiểm tra mã đơn, tài khoản/VA, credit C, số tiền, nội dung và thời gian; transaction ID và tài khoản + tham chiếu ngân hàng chống trùng. `payment_callback_lock` serialize ghi nhận callback trên nhiều instance; `payment_receipts` lưu APPLIED hoặc REVIEW, cùng transaction với cấp vé/voucher. Sai, đến muộn, đơn đã hủy/đã trả tiền hoặc hết kho/voucher được lưu REVIEW và trả ACK, không tự phát vé. Admin xem 200 giao dịch gần nhất để đối soát ngoài hệ thống, chưa có hoàn tiền tự động. Xem VIETQR_SETUP.md.
 
 ## Ngoài phạm vi v0.1
 
-Chưa có OTP, email/SMS/Zalo, khách đoàn, tích điểm, hóa đơn điện tử, đổi/hủy sau thanh toán, hoàn tiền, thanh toán QR thật, quét camera, quản lý nhân viên CRUD, báo cáo phân trang dài hạn, kiểm soát riêng từng dịch vụ. Chưa tính trẻ em và hạn mức ngày/giờ theo thỏa thuận.
+Chưa có OTP, email/SMS/Zalo, khách đoàn, tích điểm, hóa đơn điện tử, đổi/hủy sau thanh toán, hoàn tiền, quét camera, quản lý nhân viên CRUD, báo cáo phân trang dài hạn, kiểm soát riêng từng dịch vụ. Chưa tính trẻ em và hạn mức ngày/giờ theo thỏa thuận.
 
 ## Bổ sung kho mã và PDF
 

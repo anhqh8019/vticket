@@ -25,5 +25,19 @@ app:
   admin-password: ${ADMIN_PASSWORD:}
   staff-user: ${STAFF_USER:staff}
   staff-password: ${STAFF_PASSWORD:}
-  demo-payment: false
   seed-data: false
+  vietqr:
+    enabled: ${VIETQR_ENABLED:false}
+    client:
+      base-url: ${VIETQR_API_BASE_URL:https://dev.vietqr.org}
+      username: ${VIETQR_API_USERNAME:}
+      password: ${VIETQR_API_PASSWORD:}
+    bank:
+      code: ${VIETQR_BANK_CODE:MB}
+      account: ${VIETQR_BANK_ACCOUNT:}
+      account-name: ${VIETQR_BANK_ACCOUNT_NAME:}
+    callback:
+      username: ${VIETQR_CALLBACK_USERNAME:}
+      password: ${VIETQR_CALLBACK_PASSWORD:}
+      jwt-secret: ${VIETQR_CALLBACK_JWT_SECRET:}
+      token-expiration-seconds: ${VIETQR_CALLBACK_TOKEN_EXPIRATION_SECONDS:300}

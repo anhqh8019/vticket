@@ -2,25 +2,28 @@
 
 JSON. Các mutation cần CSRF token lấy từ GET `/api/csrf`, gửi header `X-XSRF-TOKEN` và cookie tương ứng. Nhân viên dùng HTTP Basic, HTTPS khi vận hành. Lỗi nghiệp vụ có `message` tiếng Việt.
 
-| Method   | Path                                      | Quyền       | Nội dung                     |
-| -------- | ----------------------------------------- | ----------- | ---------------------------- |
-| GET      | /api/public/config                        | Khách       | Cấu hình demo                |
-| GET      | /api/public/products                      | Khách       | Danh mục đang bán            |
-| POST     | /api/public/orders                        | Khách       | Đơn ONLINE                   |
-| GET      | /api/public/orders/{accessToken}          | Có token    | Đơn và vé                    |
-| POST     | /api/public/orders/{accessToken}/cancel   | Có token    | Hủy pending                  |
-| POST     | /api/public/orders/{accessToken}/demo-pay | Demo        | Thanh toán giả lập           |
-| GET      | /api/public/qr/{qrToken}                  | Có token    | PNG QR                       |
-| GET      | /api/me                                   | Nhân viên   | Tài khoản/role               |
-| GET/POST | /api/staff/orders                         | Staff/Admin | Danh sách / tạo COUNTER      |
-| POST     | /api/staff/orders/{id}/cash               | Staff/Admin | Xác nhận đã thu tiền mặt     |
-| POST     | /api/staff/orders/{id}/cancel             | Staff/Admin | Hủy pending                  |
-| POST     | /api/staff/check-in                       | Staff/Admin | Body: qrToken                |
-| GET/POST | /api/admin/products                       | Admin       | Danh sách / tạo vé, dịch vụ  |
-| PUT      | /api/admin/products/{id}                  | Admin       | Sửa giá, dịch vụ, trạng thái |
-| GET/POST | /api/admin/vouchers                       | Admin       | Danh sách / cấp voucher      |
-| POST     | /api/admin/vouchers/{code}/revoke         | Admin       | Thu hồi chưa dùng/chưa giữ   |
-| GET      | /api/admin/audit                          | Admin       | Nhật ký gần nhất             |
+| Method   | Path                                          | Quyền             | Nội dung                        |
+| -------- | --------------------------------------------- | ----------------- | ------------------------------- |
+| GET      | /api/public/config                            | Khách             | Trạng thái VietQR / môi trường  |
+| GET      | /api/public/products                          | Khách             | Danh mục đang bán               |
+| POST     | /api/public/orders                            | Khách             | Đơn ONLINE                      |
+| GET      | /api/public/orders/{accessToken}              | Có token          | Đơn và vé                       |
+| POST     | /api/public/orders/{accessToken}/cancel       | Có token          | Hủy pending                     |
+| POST     | /api/public/orders/{accessToken}/vietqr       | Có token          | Tạo / lấy lại QR VietQR         |
+| GET      | /api/public/orders/{accessToken}/vietqr/image | Có token, pending | PNG từ payload do VietQR trả về |
+| POST     | /api/public/orders/{accessToken}/confirm-zero | Có token          | Xác nhận đơn tổng 0 đồng        |
+| GET      | /api/admin/payment-receipts                   | Admin             | 200 giao dịch VietQR gần nhất   |
+| GET      | /api/public/qr/{qrToken}                      | Có token          | PNG QR                          |
+| GET      | /api/me                                       | Nhân viên         | Tài khoản/role                  |
+| GET/POST | /api/staff/orders                             | Staff/Admin       | Danh sách / tạo COUNTER         |
+| POST     | /api/staff/orders/{id}/cash                   | Staff/Admin       | Xác nhận đã thu tiền mặt        |
+| POST     | /api/staff/orders/{id}/cancel                 | Staff/Admin       | Hủy pending                     |
+| POST     | /api/staff/check-in                           | Staff/Admin       | Body: qrToken                   |
+| GET/POST | /api/admin/products                           | Admin             | Danh sách / tạo vé, dịch vụ     |
+| PUT      | /api/admin/products/{id}                      | Admin             | Sửa giá, dịch vụ, trạng thái    |
+| GET/POST | /api/admin/vouchers                           | Admin             | Danh sách / cấp voucher         |
+| POST     | /api/admin/vouchers/{code}/revoke             | Admin             | Thu hồi chưa dùng/chưa giữ      |
+| GET      | /api/admin/audit                              | Admin             | Nhật ký gần nhất                |
 
 Tạo đơn:
 
@@ -74,3 +77,16 @@ Body tạo lô:
 ```
 
 Không tạo lô cho SERVICE. Tạo đơn phải có đủ mã của lô đang mở bán và chứa ngày sử dụng. Đơn tối đa 500 vé. PDF chưa hỗ trợ QR Smile; nguồn mã hiện là VTICKET.
+
+## Callback VietQR
+
+Hai endpoint server-to-server dùng cơ chế riêng, không dùng tài khoản nhân viên và không cần CSRF:
+
+| Method | Path                              | Xác thực                   | Nội dung                             |
+| ------ | --------------------------------- | -------------------------- | ------------------------------------ |
+| POST   | /vietqr/api/token_generate        | Basic callback credentials | access_token, token_type, expires_in |
+| POST   | /vietqr/bank/api/transaction-sync | Bearer callback JWT        | Ghi nhận báo có / đối soát           |
+
+Alias tương thích: `/api/vietqr/token_generate`, `/api/vietqr/transaction-sync`, `/api-vietqr-callback/api-get-token`, `/api-vietqr-callback/api-transaction-sync`. Chi tiết body và cấu hình xem [VIETQR_SETUP.md](VIETQR_SETUP.md).
+
+GET đơn trả `{order, tickets, payment}`; `payment` là null khi chưa tạo VietQR, hoặc chứa orderId (mã VietQR 13 ký tự), state, amount, bankCode, bankAccount, accountName, virtualAccount, content, expiresAt, message. Khách poll mỗi 3 giây khi pending. Tiền mặt chỉ cho đơn COUNTER, STAFF/ADMIN, chưa chọn VietQR. PDF chỉ trả khi PAID. Endpoint `demo-pay` đã xóa.

@@ -56,7 +56,7 @@ public final class Domain {
   @Column(nullable=false) public Instant expiresAt;
   public Instant paidAt;
   @Column(length=30) public String paymentMethod;
-  @Column(length=100) public String paymentReference;
+  @Column(length=128) public String paymentReference;
   @Column(length=100) public String soldBy;
   @OneToMany(cascade=CascadeType.ALL,fetch=FetchType.EAGER) @JoinColumn(name="booking_id",nullable=false) public List<BookingLine> lines=new ArrayList<>();
  }
@@ -112,6 +112,48 @@ public final class Domain {
   public Instant soldAt;
   public Instant usedAt;
  }
+
+ public enum IntentState { CREATING, READY, FAILED, PAID, CLOSED }
+ public enum ReceiptState { APPLIED, REVIEW }
+ @Entity(name="PaymentIntent") @Table(name="payment_intents")
+ public static class PaymentIntent {
+  @Id @Column(length=13) public String id;
+  @Column(nullable=false,unique=true,length=36) public String bookingId;
+  @Enumerated(EnumType.STRING) @Column(nullable=false,length=16) public IntentState state;
+  @Column(nullable=false,precision=18,scale=0) public BigDecimal amount;
+  @Column(nullable=false,length=20) public String bankCode;
+  @Column(nullable=false,length=64) public String bankAccount;
+  @Column(nullable=false,length=150) public String accountName;
+  @Column(nullable=false,length=500) public String content;
+  @Column(length=4000) public String qrCode;
+  @Column(length=2000) public String qrLink;
+  @Column(length=512) public String transactionRefId;
+  @Column(length=64) public String virtualAccount;
+  @Column(nullable=false) public Instant createdAt;
+  @Column(nullable=false) public Instant expiresAt;
+  @Column(length=36) public String attemptId;
+  public Instant attemptStartedAt;
+  @Column(length=300) public String lastError;
+ }
+ @Entity(name="PaymentReceipt") @Table(name="payment_receipts")
+ public static class PaymentReceipt {
+  @Id @Column(length=36) public String id;
+  @Column(nullable=false,unique=true,length=128) public String transactionId;
+  @Column(nullable=false,unique=true,length=64) public String receiptKey;
+  @Column(nullable=false,length=128) public String referenceNumber;
+  @Column(nullable=false,length=64) public String providerOrderId;
+  @Column(length=36) public String bookingId;
+  @Column(nullable=false,length=64) public String bankAccount;
+  @Column(nullable=false,precision=18,scale=0) public BigDecimal amount;
+  @Column(nullable=false,length=1) public String transType;
+  @Column(nullable=false,length=2000) public String content;
+  @Column(nullable=false) public Instant transactionAt;
+  @Column(nullable=false) public Instant receivedAt;
+  @Enumerated(EnumType.STRING) @Column(nullable=false,length=16) public ReceiptState state;
+  @Column(length=64) public String reason;
+ }
+ @Entity(name="PaymentCallbackLock") @Table(name="payment_callback_lock")
+ public static class PaymentCallbackLock { @Id public Integer id; }
  @Entity(name="Audit") @Table(name="audit_events")
  public static class Audit {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id;
