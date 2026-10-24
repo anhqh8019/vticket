@@ -725,7 +725,7 @@ function Orders({ run, busy, open }) {
   );
 }
 function Manage({ run, busy, refreshCatalog }) {
-  const [tab, T] = useState("products"),
+  const [tab, T] = useState("tickets"),
     [products, P] = useState([]),
     [vouchers, V] = useState([]),
     [audit, A] = useState([]),
@@ -746,7 +746,8 @@ function Manage({ run, busy, refreshCatalog }) {
       <h1>Danh mục & ưu đãi</h1>
       <div className="tabs">
         {[
-          ["products", "Vé & dịch vụ"],
+          ["tickets", "Quản lý vé"],
+          ["services", "Dịch vụ đi kèm"],
           ["vouchers", "Voucher khách hàng"],
           ["audit", "Nhật ký"],
         ].map(([k, l]) => (
@@ -762,22 +763,27 @@ function Manage({ run, busy, refreshCatalog }) {
           </button>
         ))}
       </div>
-      {tab === "products" && (
+      {["tickets", "services"].includes(tab) && (
         <>
           <div className="row">
-            <h2>Vé, combo & dịch vụ đi kèm</h2>
+            <h2>
+              {tab === "services"
+                ? "Dịch vụ đi kèm"
+                : "Danh mục loại vé & combo"}
+            </h2>
             <button
               onClick={() => {
                 E(null);
                 F(true);
               }}
             >
-              + Tạo mới
+              {tab === "services" ? "+ Tạo dịch vụ" : "+ Tạo loại vé"}
             </button>
           </div>
           {show && (
             <ProductForm
-              key={editing?.id || "new"}
+              key={`${tab}-${editing?.id || "new"}`}
+              catalogType={tab}
               product={editing}
               products={products}
               busy={busy}
@@ -799,42 +805,56 @@ function Manage({ run, busy, refreshCatalog }) {
             <table>
               <thead>
                 <tr>
-                  <th>Mã / Tên</th>
+                  <th>
+                    {tab === "services"
+                      ? "Mã / Tên dịch vụ"
+                      : "Mã loại vé / Tên vé"}
+                  </th>
                   <th>Loại</th>
                   <th>Giá</th>
-                  <th>Dịch vụ bao gồm</th>
+                  {tab === "tickets" && <th>Dịch vụ bao gồm</th>}
                   <th>Trạng thái</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
-                {products.map((p) => (
-                  <tr key={p.id}>
-                    <td>
-                      <b>{p.name}</b>
-                      <small>{p.code}</small>
-                    </td>
-                    <td>{labels[p.kind]}</td>
-                    <td>{money(p.price)}</td>
-                    <td>
-                      {p.includedServiceIds
-                        .map((id) => products.find((s) => s.id === id)?.name)
-                        .join(", ") || "—"}
-                    </td>
-                    <td>{p.active ? "Đang bán" : "Ngừng bán"}</td>
-                    <td>
-                      <button
-                        className="secondary compact"
-                        onClick={() => {
-                          E(p);
-                          F(true);
-                        }}
-                      >
-                        Chỉnh sửa
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {products
+                  .filter((p) =>
+                    tab === "services"
+                      ? p.kind === "SERVICE"
+                      : p.kind !== "SERVICE",
+                  )
+                  .map((p) => (
+                    <tr key={p.id}>
+                      <td>
+                        <b>{p.name}</b>
+                        <small>{p.code}</small>
+                      </td>
+                      <td>{labels[p.kind]}</td>
+                      <td>{money(p.price)}</td>
+                      {tab === "tickets" && (
+                        <td>
+                          {p.includedServiceIds
+                            .map(
+                              (id) => products.find((s) => s.id === id)?.name,
+                            )
+                            .join(", ") || "—"}
+                        </td>
+                      )}
+                      <td>{p.active ? "Đang bán" : "Ngừng bán"}</td>
+                      <td>
+                        <button
+                          className="secondary compact"
+                          onClick={() => {
+                            E(p);
+                            F(true);
+                          }}
+                        >
+                          Chỉnh sửa
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
@@ -951,8 +971,10 @@ function Manage({ run, busy, refreshCatalog }) {
     </>
   );
 }
-function ProductForm({ product, products, busy, close, save }) {
-  const [kind, K] = useState(product?.kind || "TICKET"),
+function ProductForm({ product, products, busy, close, save, catalogType }) {
+  const [kind, K] = useState(
+      product?.kind || (catalogType === "services" ? "SERVICE" : "TICKET"),
+    ),
     [ids, I] = useState(product?.includedServiceIds || []);
   return (
     <form
@@ -971,10 +993,17 @@ function ProductForm({ product, products, busy, close, save }) {
         });
       }}
     >
-      <h3>{product ? "Chỉnh sửa" : "Tạo"} vé / dịch vụ</h3>
+      <h3>
+        {product ? "Chỉnh sửa" : "Tạo"}{" "}
+        {catalogType === "services" ? "dịch vụ" : "loại vé"}
+      </h3>
       <div className="two-col">
         <Field
-          label="Mã"
+          label={
+            catalogType === "services"
+              ? "Mã dịch vụ"
+              : "Mã loại vé (không phải mã vé vào cổng)"
+          }
           name="code"
           defaultValue={product?.code}
           pattern="[A-Za-z0-9_-]+"
@@ -991,7 +1020,10 @@ function ProductForm({ product, products, busy, close, save }) {
         <label className="field">
           Loại
           <select value={kind} onChange={(e) => K(e.target.value)}>
-            {["TICKET", "COMBO", "SERVICE"].map((k) => (
+            {(catalogType === "services"
+              ? ["SERVICE"]
+              : ["TICKET", "COMBO"]
+            ).map((k) => (
               <option value={k} key={k}>
                 {labels[k]}
               </option>
