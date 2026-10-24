@@ -1,6 +1,6 @@
 # Kiến trúc vticket
 
-React/Vite -> API Spring Boot -> SQL Server. Frontend và API cùng origin qua Nginx; Vite proxy dùng khi phát triển. Không triển khai nghiệp vụ đơn/voucher ở trình duyệt.
+React/Vite -> API Spring Boot 4.0.9 (Java 25) -> SQL Server. Frontend và API cùng origin qua Nginx; Vite proxy dùng khi phát triển. Không triển khai nghiệp vụ đơn/voucher ở trình duyệt.
 
 ## Dữ liệu
 

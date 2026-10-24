@@ -1,6 +1,6 @@
 # Venusgiti vticket
 
-Bản MVP React + Spring Boot + SQL Server cho bán vé online và tại quầy, kế thừa giao diện Venusgiti đã thống nhất.
+Bản MVP React + Spring Boot 4.0.9 + Java 25 + SQL Server cho bán vé online và tại quầy, kế thừa giao diện Venusgiti đã thống nhất.
 
 ## Đã triển khai
 
@@ -14,7 +14,7 @@ Bản MVP React + Spring Boot + SQL Server cho bán vé online và tại quầy,
 
 ## Chạy nhanh để thử giao diện và nghiệp vụ
 
-Cần JDK 17+, Maven 3.9+, Node.js 22.12+.
+Cần JDK 25, Maven 3.9+, Node.js 22.12+.
 
 Terminal 1:
 
@@ -108,3 +108,18 @@ Bộ test tích hợp H2 kiểm tra giảm giá cả vé + dịch vụ, hạn d�
 Chưa tích hợp thanh toán ngân hàng/QR thật, email/SMS/Zalo, OTP xác minh số điện thoại, hóa đơn điện tử, hoàn tiền/đổi ngày, quét camera, quản lý nhân viên qua giao diện hoặc báo cáo đầy đủ. Voucher hiện kiểm tra **mã bí mật + số điện thoại khớp**, chưa xác minh chủ số bằng OTP. Các mục này cần hoàn thiện trước vận hành thương mại.
 
 Xem [kết quả kiểm tra](docs/VALIDATION.md), [kiến trúc và quy tắc](docs/ARCHITECTURE.md), [API](docs/API.md).
+
+## Cập nhật Java 25 và Spring Boot 4
+
+Backend build và chạy bằng JDK 25. Docker build/runtime và GitHub Actions đều dùng Java 25. Spring Boot 4 dùng starter Web MVC/Flyway/test mới; dữ liệu và migration SQL Server được giữ nguyên.
+
+Sau khi cập nhật code trên Windows:
+```powershell
+git pull origin main
+java -version
+mvn -version
+cd backend
+mvn clean verify
+mvn spring-boot:run
+```
+Cả `java -version` và Java version trong `mvn -version` phải hiển thị 25. Nếu Maven còn dùng JDK cũ, chỉnh JAVA_HOME tới thư mục JDK 25 và mở lại terminal. Các biến DB_URL, DB_USERNAME, DB_PASSWORD, ADMIN_PASSWORD và STAFF_PASSWORD giữ cách cấu hình như trên. Nâng Java/Spring Boot không tự xử lý chứng chỉ SQL Server; local tự ký vẫn cần cấu hình trustServerCertificate phù hợp.

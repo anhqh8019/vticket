@@ -21,10 +21,12 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "25"
           cache: maven
       - run: mvn -B verify
         working-directory: backend
+      - name: Build Java 25 backend container
+        run: docker build -t vticket-backend:ci ./backend
   sqlserver:
     runs-on: ubuntu-latest
     steps:
@@ -32,7 +34,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: "17"
+          java-version: "25"
           cache: maven
       - name: Start isolated SQL Server with an ephemeral password
         shell: bash
