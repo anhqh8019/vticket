@@ -1,1 +1,110 @@
-"# vticket" 
+# Venusgiti vticket
+
+Bản MVP React + Spring Boot + SQL Server cho bán vé online và tại quầy, kế thừa giao diện Venusgiti đã thống nhất.
+
+## Đã triển khai
+
+- Tạo/sửa/ngừng bán vé, combo, dịch vụ mua thêm; gán dịch vụ bao gồm trong giá vé.
+- Đặt vé online và tại quầy, lưu snapshot giá và thông tin khách.
+- Cấp voucher riêng cho khách quen, giảm % tổng hóa đơn, có thời hạn, chỉ dùng một lần trên cả hai kênh; theo dõi và thu hồi.
+- Giữ voucher theo đơn 15 phút, giải phóng khi hủy/hết hạn; kiểm soát đồng thời bằng khóa database.
+- Thu tiền mặt tại quầy; thanh toán online **giả lập riêng ở profile demo**.
+- Phát QR thật cho từng vé, in/lưu PDF bằng trình duyệt, check-in đúng ngày và chống dùng lại.
+- Admin/staff, CSRF, nhật ký, tra cứu đơn bằng mã bí mật, thống kê trên 200 đơn gần nhất.
+
+## Chạy nhanh để thử giao diện và nghiệp vụ
+
+Cần JDK 17+, Maven 3.9+, Node.js 22.12+.
+
+Terminal 1:
+
+```bash
+cd backend
+mvn spring-boot:run -Dspring-boot.run.profiles=demo
+```
+
+Terminal 2:
+
+```bash
+cd frontend
+npm ci
+npm run dev
+```
+
+Mở http://localhost:5173. Demo dùng H2 file `backend/data`, chỉ nhằm chạy thử; hệ thống SQL Server dùng profile mặc định bên dưới.
+
+Tài khoản **chỉ dành cho demo local**:
+
+| Vai trò            | Tài khoản | Mật khẩu demo        |
+| ------------------ | --------- | -------------------- |
+| Quản trị           | admin     | demo-admin-change-me |
+| Lễ tân / kiểm soát | staff     | demo-staff-change-me |
+
+Đổi bằng ADMIN_PASSWORD và STAFF_PASSWORD. Không dùng các mật khẩu demo khi triển khai công khai. Tài khoản quản trị ban đầu chưa có màn hình đổi mật khẩu/quản lý nhân viên.
+
+## Chạy SQL Server với Docker Compose
+
+Cần Docker Engine/Desktop và Compose v2, máy x86_64, đủ RAM cho SQL Server (nên từ 8 GB). Image SQL Server Developer chỉ để phát triển/thử nghiệm.
+
+1. Sao chép `.env.example` thành `.env`.
+2. Điền ba mật khẩu khác nhau `SQLSERVER_SA_PASSWORD`, `ADMIN_PASSWORD`, `STAFF_PASSWORD` (tối thiểu 12 ký tự; SA cần chữ hoa/thường, số và ký tự đặc biệt). Không commit `.env`.
+3. Chạy:
+
+```bash
+docker compose up --build -d
+docker compose logs -f backend
+```
+
+4. Mở http://localhost:8088, đăng nhập admin/staff với mật khẩu đã đặt.
+
+Compose tự tạo DB `vticket`, chạy Flyway và có thể nạp danh mục mẫu bằng APP_SEED_DATA=true khi DB trống. SQL Server lưu ở named volume, `docker compose down` giữ dữ liệu. Không dùng `down -v` nếu cần giữ DB.
+
+Compose mặc định **không bật thanh toán giả lập**. Có thể thử bán tại quầy -> tạo đơn -> Đơn hàng -> Đã thu tiền mặt -> Xem vé -> dùng mã QR tại Kiểm soát vé. Online tạo đơn được nhưng chưa thanh toán thật.
+
+Các port chỉ bind localhost. Khi triển khai LAN/Internet cần cấu hình reverse proxy, HTTPS và tài khoản DB riêng thay vì SA. `trustServerCertificate=true` trong Compose chỉ phục vụ chứng chỉ tự ký của SQL Server local.
+
+## Kết nối SQL Server sẵn có, không Docker
+
+Tạo database `vticket` và login có quyền migration trên database đó. Cấu hình trong terminal chạy backend, ví dụ PowerShell:
+
+```powershell
+$env:DB_URL='jdbc:sqlserver://localhost:1433;databaseName=vticket;encrypt=true;trustServerCertificate=true'
+$env:DB_USERNAME='vticket'
+$env:DB_PASSWORD='<mat-khau-database>'
+$env:ADMIN_PASSWORD='<mat-khau-admin-tu-12-ky-tu>'
+$env:STAFF_PASSWORD='<mat-khau-staff-tu-12-ky-tu>'
+$env:APP_SEED_DATA='true'
+cd backend
+mvn spring-boot:run
+```
+
+Chỉ dùng trustServerCertificate=true trong môi trường thử nghiệm. Production dùng chứng chỉ tin cậy và giá trị false. Bỏ profile demo khi chạy SQL Server; database không tự tạo bởi backend.
+
+## Kiểm thử
+
+```bash
+cd backend
+mvn test
+mvn package
+cd ../frontend
+npm ci
+npm run build
+```
+
+Bộ test tích hợp H2 kiểm tra giảm giá cả vé + dịch vụ, hạn dùng/chủ voucher, giữ/giải phóng, dùng đồng thời, idempotent phát vé, check-in đồng thời, trạng thái đơn, phân quyền và CSRF. H2 không thay thế kiểm thử SQL Server. GitHub Actions có thêm job SQL Server thực khi workflow được bật.
+
+## Bài thử nghiệm khách hàng
+
+1. Admin -> Quản trị -> Vé & dịch vụ: tạo dịch vụ, tạo vé/combo và gán dịch vụ bao gồm.
+2. Voucher khách hàng: cấp giảm 15%, nhập số điện thoại và hiệu lực bao trùm hiện tại; sao chép mã.
+3. Online: chọn 2 vé + dịch vụ, nhập đúng số điện thoại và mã. Kiểm tra giảm 15% tổng đơn.
+4. Trước khi thanh toán, thử dùng lại voucher ở quầy: phải bị từ chối đang giữ.
+5. Demo: thanh toán thử, nhận QR từng vé. SQL Server: thử luồng tiền mặt tại quầy.
+6. Check-in cùng một QR hai lần: lần sau bị từ chối. QR chỉ vào đúng ngày sử dụng.
+7. Thử lại voucher đã thanh toán: phải bị từ chối. Hủy đơn chưa thanh toán thì voucher dùng lại được.
+
+## Giới hạn bản đầu
+
+Chưa tích hợp thanh toán ngân hàng/QR thật, email/SMS/Zalo, OTP xác minh số điện thoại, hóa đơn điện tử, hoàn tiền/đổi ngày, quét camera, quản lý nhân viên qua giao diện hoặc báo cáo đầy đủ. Voucher hiện kiểm tra **mã bí mật + số điện thoại khớp**, chưa xác minh chủ số bằng OTP. Các mục này cần hoàn thiện trước vận hành thương mại.
+
+Xem [kết quả kiểm tra](docs/VALIDATION.md), [kiến trúc và quy tắc](docs/ARCHITECTURE.md), [API](docs/API.md).

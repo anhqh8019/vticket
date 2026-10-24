@@ -1,0 +1,63 @@
+name: Build and test
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: mvn -B verify
+        working-directory: backend
+  sqlserver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - name: Start isolated SQL Server with an ephemeral password
+        shell: bash
+        run: |
+          CI_DB_PASSWORD="Vticket_$(openssl rand -hex 16)!"
+          echo "::add-mask::$CI_DB_PASSWORD"
+          echo "CI_DB_PASSWORD=$CI_DB_PASSWORD" >> "$GITHUB_ENV"
+          docker run -d --name vticket-ci -p 127.0.0.1:1433:1433 \
+            -e ACCEPT_EULA=Y -e MSSQL_PID=Developer \
+            -e MSSQL_SA_PASSWORD="$CI_DB_PASSWORD" \
+            mcr.microsoft.com/mssql/server:2022-latest
+          for attempt in {1..40}; do
+            if docker exec -e SQLCMDPASSWORD="$CI_DB_PASSWORD" vticket-ci \
+              /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b \
+              -Q "IF DB_ID(N'vticket_ci') IS NULL CREATE DATABASE vticket_ci"; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
+      - run: mvn -B -Dtest=SqlServerSmokeTest test
+        working-directory: backend
+        env:
+          SQLSERVER_TEST_URL: jdbc:sqlserver://localhost:1433;databaseName=vticket_ci;encrypt=true;trustServerCertificate=true
+          SQLSERVER_TEST_PASSWORD: ${{ env.CI_DB_PASSWORD }}
+      - name: Remove disposable SQL Server
+        if: always()
+        run: docker rm -f vticket-ci || true
