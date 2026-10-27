@@ -702,3 +702,23 @@ a.button {
 .payment-qr .row {
   font-size: 14px;
 }
+
+.hero-video {
+  min-width: 0;
+  min-height: 290px;
+  position: relative;
+  background: #000;
+}
+.hero-video iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+@media (max-width: 900px) {
+  .hero-video {
+    min-height: 0;
+    aspect-ratio: 16 / 9;
+  }
+}

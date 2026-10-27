@@ -62,7 +62,7 @@ function App() {
       </div>
       <header>
         <button className="brand" onClick={() => go("shop")}>
-          ♨ Venusgiti<small>HOT SPRINGS RESOFT & SPA</small>
+          ♨ Venusgiti<small>MINERAL SPRINGS & WELLNESS</small>
         </button>
         <nav>
           <button onClick={() => go("shop")}>Đặt vé</button>
@@ -227,12 +227,14 @@ function Shop({ counter, products, run, busy, placed }) {
             <p>Chọn trải nghiệm khoáng nóng và dịch vụ dành riêng cho bạn.</p>
             <span className="badge">Đặt vé trực tuyến · Nhận vé điện tử</span>
           </div>
-          <div className="landscape">
-            <div className="sun" />
-            <div className="hill" />
-            <div className="hill two" />
-            <div className="pool" />
-            <span>Trở về với sự cân bằng</span>
+          <div className="hero-video">
+            <iframe
+              src="https://www.youtube.com/embed/wg8SBmA23cY?autoplay=1&mute=1&loop=1&playlist=wg8SBmA23cY&playsinline=1&rel=0"
+              title="Video giới thiệu Venusgiti"
+              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
           </div>
         </section>
       ) : (
