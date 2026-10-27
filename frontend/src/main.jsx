@@ -62,7 +62,7 @@ function App() {
       </div>
       <header>
         <button className="brand" onClick={() => go("shop")}>
-          ♨ Venusgiti<small>MINERAL SPRINGS & WELLNESS</small>
+          ♨ Venusgiti<small>HOT SPRINGS RESOFT & SPA</small>
         </button>
         <nav>
           <button onClick={() => go("shop")}>Đặt vé</button>
