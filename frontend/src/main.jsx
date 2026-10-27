@@ -62,7 +62,8 @@ function App() {
       </div>
       <header>
         <button className="brand" onClick={() => go("shop")}>
-          ♨ Venusgiti<small>MINERAL SPRINGS & WELLNESS</small>
+          <img className="brand-logo" src="/venusgiti-logo.svg" alt="Venusgiti" width="144" height="108" />
+          <small>HOT SPRING RESOFT SPA</small>
         </button>
         <nav>
           <button onClick={() => go("shop")}>Đặt vé</button>
