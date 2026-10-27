@@ -1,3 +1,4 @@
+import { comboQuantityError, comboTicketCount } from "./combo.js";
 import { parseSmileCodes } from "./smile-import.js";
 import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
@@ -62,7 +63,13 @@ function App() {
       </div>
       <header>
         <button className="brand" onClick={() => go("shop")}>
-          <img className="brand-logo" src="/venusgiti-logo.svg" alt="Venusgiti" width="144" height="108" />
+          <img
+            className="brand-logo"
+            src="/venusgiti-logo.svg"
+            alt="Venusgiti"
+            width="144"
+            height="108"
+          />
           <small>HOT SPRING RESOFT SPA</small>
         </button>
         <nav>
@@ -192,6 +199,9 @@ function Shop({ counter, products, run, busy, placed }) {
     });
   const selected = products.filter((p) => qty[p.id]),
     subtotal = selected.reduce((s, p) => s + p.price * qty[p.id], 0);
+  const quantityErrors = selected
+    .map((p) => comboQuantityError(p, qty[p.id]))
+    .filter(Boolean);
   const change = (id, n) => Q({ ...qty, [id]: Math.max(0, Math.min(100, n)) });
   const quantity = (p) => (
     <div className="qty">
@@ -199,16 +209,36 @@ function Shop({ counter, products, run, busy, placed }) {
         type="button"
         className="secondary"
         aria-label={"Giảm " + p.name}
-        onClick={() => change(p.id, (qty[p.id] || 0) - 1)}
+        onClick={() =>
+          change(
+            p.id,
+            (qty[p.id] || 0) -
+              (p.kind === "COMBO" ? p.comboBuyQuantity || 1 : 1),
+          )
+        }
       >
         −
       </button>
-      <b>{qty[p.id] || 0}</b>
+      <input
+        type="number"
+        min="0"
+        max="100"
+        step="1"
+        aria-label={"Số vé " + p.name}
+        value={qty[p.id] || 0}
+        onChange={(e) => change(p.id, Number(e.target.value))}
+      />
       <button
         type="button"
         className="secondary"
         aria-label={"Tăng " + p.name}
-        onClick={() => change(p.id, (qty[p.id] || 0) + 1)}
+        onClick={() =>
+          change(
+            p.id,
+            (qty[p.id] || 0) +
+              (p.kind === "COMBO" ? p.comboBuyQuantity || 1 : 1),
+          )
+        }
       >
         +
       </button>
@@ -249,6 +279,7 @@ function Shop({ counter, products, run, busy, placed }) {
         onSubmit={(e) => {
           e.preventDefault();
           run(async () => {
+            if (quantityErrors.length) throw new Error(quantityErrors[0]);
             if (!selected.some((p) => p.kind !== "SERVICE"))
               throw new Error("Chọn ít nhất một vé hoặc combo");
             placed(
@@ -283,37 +314,62 @@ function Shop({ counter, products, run, busy, placed }) {
               em.
             </p>
           </div>
-          <h2>Vé & combo</h2>
-          <div className="cards">
-            {products
-              .filter((p) => p.kind !== "SERVICE")
-              .map((p, i) => (
-                <article className="card" key={p.id}>
-                  <div className={"art a" + (i % 3)}>
-                    {p.kind === "COMBO" ? "✧" : "≈"}
-                  </div>
-                  <div className="cardbody">
-                    <span className="badge">{labels[p.kind]}</span>
-                    <h3>{p.name}</h3>
-                    <p>{p.description}</p>
-                    {p.includedServiceIds.length > 0 && (
-                      <p className="muted">
-                        Bao gồm:{" "}
-                        {p.includedServiceIds
-                          .map(
-                            (id) =>
-                              products.find((s) => s.id === id)?.name ||
-                              "Dịch vụ",
-                          )
-                          .join(", ")}
-                      </p>
-                    )}
-                    <b className="price">{money(p.price)}</b>
-                    {quantity(p)}
-                  </div>
-                </article>
-              ))}
-          </div>
+          {[
+            { kind: "TICKET", title: "Vé" },
+            { kind: "COMBO", title: "Combo ưu đãi" },
+          ].map((group) => (
+            <section key={group.kind}>
+              <h2>{group.title}</h2>
+              <div className="cards">
+                {products
+                  .filter((p) => p.kind === group.kind)
+                  .map((p, i) => (
+                    <article className="card" key={p.id}>
+                      <div className={"art a" + (i % 3)}>
+                        {p.kind === "COMBO" ? "✧" : "≈"}
+                      </div>
+                      <div className="cardbody">
+                        <span className="badge">{labels[p.kind]}</span>
+                        <h3>{p.name}</h3>
+                        <p>{p.description}</p>
+                        {p.includedServiceIds.length > 0 && (
+                          <p className="muted">
+                            Bao gồm:{" "}
+                            {p.includedServiceIds
+                              .map(
+                                (id) =>
+                                  products.find((s) => s.id === id)?.name ||
+                                  "Dịch vụ",
+                              )
+                              .join(", ")}
+                          </p>
+                        )}
+                        {p.kind === "COMBO" && (
+                          <p className="muted">
+                            Áp dụng vé:{" "}
+                            {products.find((t) => t.id === p.comboTicketId)
+                              ?.name || "Chưa cấu hình"}
+                            <br />
+                            Mua {p.comboBuyQuantity} vé
+                            {p.comboGiftQuantity
+                              ? ` tặng ${p.comboGiftQuantity} vé`
+                              : ""}
+                            . Nhập số vé là bội số của {p.comboBuyQuantity}.{" "}
+                            {qty[p.id] > 0 &&
+                              `Bạn nhận ${comboTicketCount(p, qty[p.id])} vé (gồm vé tặng).`}
+                          </p>
+                        )}
+                        <b className="price">
+                          {money(p.price)}
+                          {p.kind === "COMBO" ? " / vé mua" : ""}
+                        </b>
+                        {quantity(p)}
+                      </div>
+                    </article>
+                  ))}
+              </div>
+            </section>
+          ))}
           <section className="panel">
             <h2>Dịch vụ mua thêm</h2>
             {products
@@ -383,7 +439,15 @@ function Shop({ counter, products, run, busy, placed }) {
           <p className="muted">
             Số tiền sau giảm hiển thị ở bước xác nhận đơn.
           </p>
-          <button className="full" disabled={busy || !subtotal}>
+          {quantityErrors.map((error) => (
+            <p className="alert" key={error}>
+              {error}
+            </p>
+          ))}
+          <button
+            className="full"
+            disabled={busy || !subtotal || quantityErrors.length > 0}
+          >
             Tạo đơn & xem thanh toán →
           </button>
           <p className="muted">Đơn và voucher được giữ tối đa 15 phút.</p>
@@ -483,7 +547,14 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
                         {l.name}
                         <small>{l.includedServices}</small>
                       </td>
-                      <td>{l.quantity}</td>
+                      <td>
+                        {l.quantity}
+                        {l.kind === "COMBO" && (
+                          <small>
+                            Cấp {l.ticketQuantity ?? l.quantity} vé, gồm vé tặng
+                          </small>
+                        )}
+                      </td>
                       <td>{money(l.unitPrice * l.quantity)}</td>
                     </tr>
                   ))}
@@ -936,6 +1007,7 @@ function Manage({ run, busy, refreshCatalog }) {
       <div className="tabs">
         {[
           ["tickets", "Quản lý vé"],
+          ["combos", "Quản lý combo"],
           ["services", "Dịch vụ đi kèm"],
           ["batches", "Lô vé & mã vé"],
           ["vouchers", "Voucher khách hàng"],
@@ -954,13 +1026,15 @@ function Manage({ run, busy, refreshCatalog }) {
           </button>
         ))}
       </div>
-      {["tickets", "services"].includes(tab) && (
+      {["tickets", "combos", "services"].includes(tab) && (
         <>
           <div className="row">
             <h2>
               {tab === "services"
                 ? "Dịch vụ đi kèm"
-                : "Danh mục loại vé & combo"}
+                : tab === "combos"
+                  ? "Danh mục combo"
+                  : "Danh mục loại vé"}
             </h2>
             <button
               onClick={() => {
@@ -968,7 +1042,11 @@ function Manage({ run, busy, refreshCatalog }) {
                 F(true);
               }}
             >
-              {tab === "services" ? "+ Tạo dịch vụ" : "+ Tạo loại vé"}
+              {tab === "services"
+                ? "+ Tạo dịch vụ"
+                : tab === "combos"
+                  ? "+ Tạo combo"
+                  : "+ Tạo loại vé"}
             </button>
           </div>
           {show && (
@@ -1003,17 +1081,22 @@ function Manage({ run, busy, refreshCatalog }) {
                   </th>
                   <th>Loại</th>
                   <th>Giá</th>
-                  {tab === "tickets" && <th>Dịch vụ bao gồm</th>}
+                  {tab === "combos" && <th>Vé tham chiếu / Điều kiện</th>}
+                  {tab !== "services" && <th>Dịch vụ bao gồm</th>}
                   <th>Trạng thái</th>
                   <th />
                 </tr>
               </thead>
               <tbody>
                 {products
-                  .filter((p) =>
-                    tab === "services"
-                      ? p.kind === "SERVICE"
-                      : p.kind !== "SERVICE",
+                  .filter(
+                    (p) =>
+                      p.kind ===
+                      (tab === "services"
+                        ? "SERVICE"
+                        : tab === "combos"
+                          ? "COMBO"
+                          : "TICKET"),
                   )
                   .map((p) => (
                     <tr key={p.id}>
@@ -1022,8 +1105,21 @@ function Manage({ run, busy, refreshCatalog }) {
                         <small>{p.code}</small>
                       </td>
                       <td>{labels[p.kind]}</td>
-                      <td>{money(p.price)}</td>
-                      {tab === "tickets" && (
+                      <td>
+                        {money(p.price)}
+                        {p.kind === "COMBO" && <small>/ vé mua</small>}
+                      </td>
+                      {tab === "combos" && (
+                        <td>
+                          {products.find((t) => t.id === p.comboTicketId)
+                            ?.name || "Chưa cấu hình"}
+                          <small>
+                            Mua {p.comboBuyQuantity || "?"}, tặng{" "}
+                            {p.comboGiftQuantity || 0}
+                          </small>
+                        </td>
+                      )}
+                      {tab !== "services" && (
                         <td>
                           {p.includedServiceIds
                             .map(
@@ -1399,13 +1495,13 @@ function BatchManager({ products, run, busy }) {
               required
             />
             <label className="field">
-              Loại vé / combo
+              Loại vé
               <select name="productId" required defaultValue="">
                 <option value="" disabled>
                   Chọn loại vé
                 </option>
                 {products
-                  .filter((p) => p.kind !== "SERVICE")
+                  .filter((p) => p.kind === "TICKET")
                   .map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}
@@ -1782,7 +1878,12 @@ function BatchManager({ products, run, busy }) {
 
 function ProductForm({ product, products, busy, close, save, catalogType }) {
   const [kind, K] = useState(
-      product?.kind || (catalogType === "services" ? "SERVICE" : "TICKET"),
+      product?.kind ||
+        (catalogType === "services"
+          ? "SERVICE"
+          : catalogType === "combos"
+            ? "COMBO"
+            : "TICKET"),
     ),
     [ids, I] = useState(product?.includedServiceIds || []);
   return (
@@ -1799,12 +1900,22 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           kind,
           active: f.get("active") === "on",
           includedServiceIds: kind === "SERVICE" ? [] : ids,
+          comboTicketId:
+            kind === "COMBO" ? Number(f.get("comboTicketId")) : null,
+          comboBuyQuantity:
+            kind === "COMBO" ? Number(f.get("comboBuyQuantity")) : null,
+          comboGiftQuantity:
+            kind === "COMBO" ? Number(f.get("comboGiftQuantity")) : null,
         });
       }}
     >
       <h3>
         {product ? "Chỉnh sửa" : "Tạo"}{" "}
-        {catalogType === "services" ? "dịch vụ" : "loại vé"}
+        {catalogType === "services"
+          ? "dịch vụ"
+          : catalogType === "combos"
+            ? "combo"
+            : "loại vé"}
       </h3>
       <div className="two-col">
         <Field
@@ -1831,7 +1942,9 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           <select value={kind} onChange={(e) => K(e.target.value)}>
             {(catalogType === "services"
               ? ["SERVICE"]
-              : ["TICKET", "COMBO"]
+              : catalogType === "combos"
+                ? ["COMBO"]
+                : ["TICKET"]
             ).map((k) => (
               <option value={k} key={k}>
                 {labels[k]}
@@ -1840,7 +1953,11 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           </select>
         </label>
         <Field
-          label="Giá bán (VND)"
+          label={
+            kind === "COMBO"
+              ? "Đơn giá một vé mua trong combo (VND)"
+              : "Giá bán (VND)"
+          }
           type="number"
           name="price"
           defaultValue={product?.price || 0}
@@ -1850,6 +1967,57 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           required
         />
       </div>
+      {kind === "COMBO" && (
+        <>
+          <label className="field">
+            Loại vé tham chiếu
+            <select
+              name="comboTicketId"
+              required
+              defaultValue={product?.comboTicketId || ""}
+            >
+              <option value="" disabled>
+                Chọn một loại vé
+              </option>
+              {products
+                .filter((p) => p.kind === "TICKET")
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.active ? "" : " (ngừng bán)"}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <div className="two-col">
+            <Field
+              label="Số vé phải mua mỗi nhóm"
+              name="comboBuyQuantity"
+              type="number"
+              min="1"
+              max="100"
+              step="1"
+              defaultValue={product?.comboBuyQuantity || 10}
+              required
+            />
+            <Field
+              label="Số vé tặng mỗi nhóm"
+              name="comboGiftQuantity"
+              type="number"
+              min="0"
+              max="100"
+              step="1"
+              defaultValue={product?.comboGiftQuantity ?? 1}
+              required
+            />
+          </div>
+          <p className="muted">
+            Ví dụ mua 10 tặng 1, đơn giá 450.000đ: nhập 10 thì thu 4.500.000đ và
+            cấp 11 vé. Combo lấy cả vé mua và vé tặng từ kho của loại vé tham
+            chiếu, không tạo lô riêng.
+          </p>
+        </>
+      )}
       <Field
         label="Mô tả"
         name="description"

@@ -18,6 +18,9 @@ public final class Domain {
   @Column(length=1000) public String description;
   @Enumerated(EnumType.STRING) @Column(nullable=false,length=16) public Kind kind;
   @Column(nullable=false,precision=18,scale=0) public BigDecimal price;
+  public Long comboTicketId;
+  public Integer comboBuyQuantity;
+  public Integer comboGiftQuantity;
   @Column(nullable=false) public boolean active=true;
   @ElementCollection(fetch=FetchType.EAGER) @CollectionTable(name="product_services",joinColumns=@JoinColumn(name="product_id")) @Column(name="service_id",nullable=false) public Set<Long> includedServiceIds=new HashSet<>();
  }
@@ -69,6 +72,9 @@ public final class Domain {
   @Enumerated(EnumType.STRING) @Column(nullable=false,length=16) public Kind kind;
   @Column(nullable=false,precision=18,scale=0) public BigDecimal unitPrice;
   @Column(nullable=false) public int quantity;
+  public Long ticketProductId;
+  public Integer ticketQuantity;
+  @Column(length=150) public String ticketProductName;
  }
  @Entity(name="Ticket") @Table(name="tickets")
  public static class Ticket {

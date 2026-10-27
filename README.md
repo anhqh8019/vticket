@@ -142,3 +142,7 @@ Cấu hình, URL callback, kiểm tra sandbox và xử lý chuyển khoản sai/
 ## Chuẩn bị dữ liệu Smile
 
 Màn hình lô vé hỗ trợ **nhập Seri / barcode gốc từ Smile**, mã/tên loại vé Smile, thời hạn và liên kết loại vé bán trên web. Giữ nguyên số 0 đầu, kiểm tra trùng và lưu đúng mã theo vé đã bán. Lô nhập mới tạm dừng để kiểm tra; chưa đồng bộ API hoặc soát QR qua cổng Smile. Xem [hướng dẫn nhập lô Smile](docs/SMILE_INTEGRATION.md).
+
+## Vé và combo
+
+Quản trị tách tab Vé / Combo / Dịch vụ. Combo tham chiếu một loại vé, cấu hình số vé cần mua và số vé tặng. Khách nhập số vé mua theo bội số nhóm; hệ thống chặn số chưa đủ, tính đơn giá mỗi vé mua và lấy cả vé tặng từ kho vé gốc. **Sau nâng cấp V6, cấu hình lại combo cũ trước khi mở bán**; không suy điều kiện từ tên/mô tả và không dùng lô combo cũ để thay kho vé gốc. Xem docs/API.md.

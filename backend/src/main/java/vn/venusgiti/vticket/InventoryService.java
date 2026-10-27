@@ -15,11 +15,11 @@ public class InventoryService {
  InventoryService(Products p,TicketBatches b,TicketStock s,Tickets t,Audits a,Clock c,TicketIdentifierCounters ids){products=p;batches=b;stock=s;tickets=t;audits=a;clock=c;counters=ids;}
  private void require(boolean c,String m){BookingService.require(c,m);}
  public void lockProducts(Collection<Long> ids){ids.stream().distinct().sorted().forEach(id->products.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy vé/dịch vụ")));}
- public void lockBooking(Booking b){lockProducts(b.lines.stream().map(l->l.productId).toList());}
+ public void lockBooking(Booking b){var ids=new ArrayList<Long>();for(var l:b.lines){ids.add(l.productId);if(l.ticketProductId!=null)ids.add(l.ticketProductId);}lockProducts(ids);}
  private void reset(StockCode s){s.state=StockState.AVAILABLE;s.reservedOrderId=null;s.reservedUntil=null;}
  public TicketBatch createBatch(BatchInput in,String actor){
   lockProducts(List.of(in.productId()));Product p=products.findById(in.productId()).orElseThrow();
-  require(p.kind!=Kind.SERVICE,"Dịch vụ không quản lý lô vé");require(!in.validUntil().isBefore(in.validFrom()),"Ngày hết hạn phải từ ngày bắt đầu trở đi");require(!in.validUntil().isBefore(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))),"Lô vé đã hết hạn");
+  require(p.kind==Kind.TICKET,"Chỉ tạo lô cho vé; combo dùng kho của loại vé tham chiếu");require(!in.validUntil().isBefore(in.validFrom()),"Ngày hết hạn phải từ ngày bắt đầu trở đi");require(!in.validUntil().isBefore(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))),"Lô vé đã hết hạn");
   TicketBatch b=new TicketBatch();b.id=UUID.randomUUID().toString();b.code=in.code();b.productId=p.id;b.quantity=in.quantity();b.validFrom=in.validFrom();b.validUntil=in.validUntil();b.createdAt=clock.instant();b.createdBy=actor;batches.saveAndFlush(b);
   var counter=counters.acquire();
   for(int i=1;i<=in.quantity();i++){StockCode s=new StockCode();s.id=UUID.randomUUID().toString();s.batchId=b.id;s.productId=p.id;s.code=b.code+"-"+String.format(Locale.ROOT,"%06d",i);s.qrToken=UUID.randomUUID().toString();assignIdentifiers(s,counter);stock.save(s);}
@@ -39,7 +39,7 @@ public class InventoryService {
    require(serials.add(row.serial().toUpperCase(Locale.ROOT)),"Seri bị trùng trong danh sách: "+row.serial());require(barcodes.add(row.barcode().toUpperCase(Locale.ROOT)),"Barcode bị trùng trong danh sách: "+row.barcode());
   }
   lockProducts(List.of(in.productId()));Product p=products.findById(in.productId()).orElseThrow();
-  require(p.kind!=Kind.SERVICE,"Dịch vụ không quản lý lô vé");require(!in.validUntil().isBefore(in.validFrom()),"Ngày hết hạn phải từ ngày bắt đầu trở đi");require(!in.validUntil().isBefore(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))),"Lô vé đã hết hạn");
+  require(p.kind==Kind.TICKET,"Chỉ tạo lô cho vé; combo dùng kho của loại vé tham chiếu");require(!in.validUntil().isBefore(in.validFrom()),"Ngày hết hạn phải từ ngày bắt đầu trở đi");require(!in.validUntil().isBefore(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))),"Lô vé đã hết hạn");
   TicketBatch b=new TicketBatch();b.id=UUID.randomUUID().toString();b.code=in.code();b.productId=p.id;b.quantity=in.codes().size();b.validFrom=in.validFrom();b.validUntil=in.validUntil();b.source="SMILE";b.active=false;b.smileIsWeekday=in.smileIsWeekday();b.smileIsChild=in.smileIsChild();b.smileTicketTypeCode=in.smileTicketTypeCode();b.smileTicketTypeName=in.smileTicketTypeName().strip();b.createdAt=clock.instant();b.createdBy=actor;batches.saveAndFlush(b);
   int index=0;for(var row:in.codes()){StockCode code=new StockCode();code.id=UUID.randomUUID().toString();code.batchId=b.id;code.productId=p.id;code.code=b.code+"-"+String.format(Locale.ROOT,"%06d",++index);code.qrToken=UUID.randomUUID().toString();code.smileSeqNo=row.seqNo();code.smileSerial=row.serial();code.smileBarcode=row.barcode();stock.save(code);}
   stock.flush();Audit a=new Audit();a.happenedAt=clock.instant();a.actor=actor;a.action="SMILE_BATCH_IMPORTED";a.target=b.code;audits.save(a);return b;
@@ -56,23 +56,24 @@ public class InventoryService {
   Audit audit=new Audit();audit.happenedAt=clock.instant();audit.actor=actor;audit.action="BATCH_IDENTIFIERS_GENERATED";audit.target=b.code;audits.save(audit);return b;
  }
  public void reserve(Booking b){
-  int total=b.lines.stream().filter(l->l.kind!=Kind.SERVICE).mapToInt(l->l.quantity).sum();require(total<=500,"Tối đa 500 vé trong một đơn");
+  int total=b.lines.stream().filter(l->l.kind!=Kind.SERVICE).mapToInt(this::ticketCount).sum();require(total<=500,"Tối đa 500 vé trong một đơn");
   for(BookingLine l:b.lines)if(l.kind!=Kind.SERVICE){
-   for(StockCode old:stock.expired(l.productId,StockState.RESERVED,clock.instant()))reset(old);
-   stock.flush();var available=stock.available(l.productId,StockState.AVAILABLE,b.visitDate,PageRequest.of(0,l.quantity));
-   require(available.size()==l.quantity,"Không đủ mã vé cho "+l.name+" vào ngày đã chọn. Vui lòng tạo/bổ sung lô vé hoặc giảm số lượng.");
+   for(StockCode old:stock.expired(ticketProduct(l),StockState.RESERVED,clock.instant()))reset(old);
+   stock.flush();var available=stock.available(ticketProduct(l),StockState.AVAILABLE,b.visitDate,PageRequest.of(0,ticketCount(l)));
+   require(available.size()==ticketCount(l),"Không đủ mã vé cho "+l.name+" vào ngày đã chọn. Vui lòng tạo/bổ sung lô vé hoặc giảm số lượng.");
    for(var s:available){s.state=StockState.RESERVED;s.reservedOrderId=b.id;s.reservedUntil=b.expiresAt;}
   }
  }
  public void release(Booking b){for(var s:stock.reserved(b.id))reset(s);}
- public boolean reservationValid(Booking b,Instant at){var held=stock.reserved(b.id);Map<Long,Long> counts=new HashMap<>();for(var row:held){if(row.state!=StockState.RESERVED||row.reservedUntil==null||!row.reservedUntil.isAfter(at))return false;counts.merge(row.productId,1L,Long::sum);}return b.lines.stream().filter(l->l.kind!=Kind.SERVICE).allMatch(l->counts.getOrDefault(l.productId,0L)==l.quantity)&&held.size()==b.lines.stream().filter(l->l.kind!=Kind.SERVICE).mapToInt(l->l.quantity).sum();}
+ private Long ticketProduct(BookingLine l){return l.ticketProductId==null?l.productId:l.ticketProductId;}
+ private int ticketCount(BookingLine l){return l.ticketQuantity==null?l.quantity:l.ticketQuantity;}
+ private Map<Long,Long> expected(Booking b){Map<Long,Long> counts=new HashMap<>();for(var l:b.lines)if(l.kind!=Kind.SERVICE)counts.merge(ticketProduct(l),(long)ticketCount(l),Long::sum);return counts;}
+ public boolean reservationValid(Booking b,Instant at){Map<Long,Long> actual=new HashMap<>();for(var row:stock.reserved(b.id)){if(row.state!=StockState.RESERVED||row.reservedUntil==null||!row.reservedUntil.isAfter(at))return false;actual.merge(row.productId,1L,Long::sum);}return expected(b).equals(actual);}
  public void issue(Booking b,Instant at){
-  var reserved=stock.reserved(b.id);Map<Long,BookingLine> lines=new HashMap<>();for(var l:b.lines)if(l.kind!=Kind.SERVICE)lines.put(l.productId,l);
-  Map<Long,Long> actual=new HashMap<>();for(var s:reserved)actual.merge(s.productId,1L,Long::sum);
-  require(lines.entrySet().stream().allMatch(e->actual.getOrDefault(e.getKey(),0L)==e.getValue().quantity)&&reserved.size()==lines.values().stream().mapToInt(l->l.quantity).sum(),"Đơn không còn đủ mã vé đang giữ. Vui lòng hủy đơn và đặt lại.");
-  for(var s:reserved){require(s.state==StockState.RESERVED&&s.reservedUntil.isAfter(at),"Mã vé đã hết thời gian giữ");var l=lines.get(s.productId);var batch=batches.findById(s.batchId).orElseThrow();
-   s.state=StockState.SOLD;s.soldOrderId=b.id;s.soldAt=at;s.reservedOrderId=null;s.reservedUntil=null;
-   Ticket t=new Ticket();t.id=UUID.randomUUID().toString();t.stockId=s.id;t.ticketCode=s.code;t.batchCode=batch.code;t.source=batch.source;t.smileSeqNo=s.smileSeqNo;t.smileIsWeekday=batch.smileIsWeekday;t.smileIsChild=batch.smileIsChild;t.smileSerial=s.smileSerial;t.smileBarcode=s.smileBarcode;t.smileTicketTypeCode=batch.smileTicketTypeCode;t.smileTicketTypeName=batch.smileTicketTypeName;t.qrToken=s.qrToken;t.bookingId=b.id;t.productName=l.name;t.includedServices=l.includedServices;t.visitDate=b.visitDate;tickets.save(t);
+  var reserved=stock.reserved(b.id);Map<Long,Long> actual=new HashMap<>();Map<Long,Deque<StockCode>> queues=new HashMap<>();for(var row:reserved){actual.merge(row.productId,1L,Long::sum);queues.computeIfAbsent(row.productId,key->new ArrayDeque<>()).add(row);}
+  require(expected(b).equals(actual),"Đơn không còn đủ mã vé đang giữ. Vui lòng hủy đơn và đặt lại.");
+  for(var l:b.lines)if(l.kind!=Kind.SERVICE)for(int n=0;n<ticketCount(l);n++){var s=queues.get(ticketProduct(l)).removeFirst();require(s.state==StockState.RESERVED&&s.reservedUntil.isAfter(at),"Mã vé đã hết thời gian giữ");var batch=batches.findById(s.batchId).orElseThrow();s.state=StockState.SOLD;s.soldOrderId=b.id;s.soldAt=at;s.reservedOrderId=null;s.reservedUntil=null;
+   Ticket t=new Ticket();t.id=UUID.randomUUID().toString();t.stockId=s.id;t.ticketCode=s.code;t.batchCode=batch.code;t.source=batch.source;t.smileSeqNo=s.smileSeqNo;t.smileIsWeekday=batch.smileIsWeekday;t.smileIsChild=batch.smileIsChild;t.smileSerial=s.smileSerial;t.smileBarcode=s.smileBarcode;t.smileTicketTypeCode=batch.smileTicketTypeCode;t.smileTicketTypeName=batch.smileTicketTypeName;t.qrToken=s.qrToken;t.bookingId=b.id;t.productName=l.ticketProductName==null?l.name:l.ticketProductName;t.includedServices=l.includedServices;t.visitDate=b.visitDate;tickets.save(t);
   }
  }
  public void used(Ticket t){if(t.stockId!=null){var s=stock.lockId(t.stockId).orElseThrow();require(s.state==StockState.SOLD&&t.bookingId.equals(s.soldOrderId),"Trạng thái mã vé không hợp lệ");s.state=StockState.USED;s.usedAt=clock.instant();}}

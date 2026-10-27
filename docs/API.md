@@ -113,3 +113,13 @@ GET đơn trả `{order, tickets, payment}`; `payment` là null khi chưa tạo 
 Mã trong ví dụ là dữ liệu minh họa, không phải mã Smile hợp lệ. Không gửi quantity: server tính theo codes. Hai cờ smileIsWeekday/smileIsChild mặc định false; cờ true chỉ cho lưu lô tạm dừng. Mỗi phần tử codes có thể thêm seqNo (chuỗi số tối đa 19 ký tự), pkgCode, fromDate, toDate, isWeekday, isChild, isCancel, isLoss; server kiểm tra khớp cấu hình lô và từ chối mã hủy/báo mất. Response là TicketBatch với source=SMILE, active=false. Kiểm tra và mở bán qua endpoint active hiện có. Ngày hết hạn không được trước ngày hiện tại. Không cho nhập SERVICE. Trùng/vi phạm ràng buộc trả 409, body sai trả 400; toàn bộ import rollback khi có lỗi.
 
 GET `/api/admin/ticket-batches/{id}/codes` giữ phân trang/bộ lọc cũ, bổ sung smileSerial, smileBarcode từng mã và smileTicketTypeCode/Name trên batch. GET đơn đã trả tiền bổ sung source, smileSerial, smileBarcode, smileTicketTypeCode/Name trên vé đã cấp. Không endpoint nào trong phần này thực hiện kết nối hoặc đồng bộ Smile.
+
+## Combo tham chiếu loại vé
+
+Product kind COMBO cần comboTicketId (ID một TICKET), comboBuyQuantity (1–100), comboGiftQuantity (0–100). price là **đơn giá mỗi vé mua**, không phải giá trọn combo. Vé, combo và dịch vụ được quản lý riêng; không đổi kind sau khi tạo.
+
+Ví dụ price=450000, comboBuyQuantity=10, comboGiftQuantity=1: dòng đặt quantity=10 tính 4.500.000đ và cấp 11 vé; quantity=20 cấp 22 vé. quantity phải là bội số của comboBuyQuantity, tối đa 100; kiểm tra ở cả frontend và backend trước khi tạo đơn/chuyển sang thanh toán. Vé tặng không tính tiền nhưng giữ/cấp mã thật từ kho comboTicketId. Tổng mã thực tế một đơn tối đa 500, gồm vé tặng.
+
+BookingLine lưu ticketProductId, ticketQuantity, ticketProductName tại thời điểm đặt. Thanh toán/giữ mã/phát hành theo snapshot này, không tính lại theo cấu hình combo hiện tại. Dịch vụ bao gồm là hợp của dịch vụ trên vé gốc và combo, không tự nhân thành dòng thu tiền thêm.
+
+Chỉ tạo/nhập lô cho TICKET, không tạo lô riêng cho COMBO. Flyway V6 tạm dừng combo cũ do không thể suy số vé mua/tặng từ tên hoặc mô tả: quản trị vào tab Combo, chọn vé gốc, nhập điều kiện và kiểm tra lại đơn giá trước khi mở bán. Đơn/vé đã tạo trước nâng cấp giữ cơ chế snapshot cũ, không tự thay đổi số lượng.

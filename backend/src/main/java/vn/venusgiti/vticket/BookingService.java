@@ -17,15 +17,20 @@ public class BookingService {
  static String phone(String value){return value.replaceAll("[ -]","").replaceFirst("^\\+84","0");}
  private Instant now(){return clock.instant();}
  void audit(String actor,String action,String target){Audit a=new Audit();a.happenedAt=now();a.actor=actor;a.action=action;a.target=target;audits.save(a);}
+ @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
  public Booking create(OrderInput input,Channel channel,String actor){
   require(!input.visitDate().isBefore(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))) ,"Ngày sử dụng đã qua");
-  inventory.lockProducts(input.lines().stream().map(LineInput::productId).toList());
+  var lockIds=new ArrayList<Long>(input.lines().stream().map(LineInput::productId).toList());
+  for(var item:input.lines()){var selected=products.findById(item.productId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy vé/dịch vụ"));if(selected.kind==Kind.COMBO&&selected.comboTicketId!=null)lockIds.add(selected.comboTicketId);}
+  inventory.lockProducts(lockIds);
   Booking b=new Booking();b.id=UUID.randomUUID().toString();b.accessToken=UUID.randomUUID().toString();b.customerName=input.customerName().trim();b.phone=phone(input.phone());b.email=input.email();b.visitDate=input.visitDate();b.channel=channel;b.status=Status.PENDING;b.createdAt=now();b.expiresAt=now().plus(Duration.ofMinutes(15));b.soldBy=actor;b.subtotal=BigDecimal.ZERO;
   Set<Long> seen=new HashSet<>();boolean hasTicket=false;
   for(LineInput item:input.lines()){
    require(seen.add(item.productId()),"Loại vé/dịch vụ bị trùng dòng");
-   Product p=products.findById(item.productId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy vé/dịch vụ"));require(p.active,"Vé/dịch vụ đã ngừng bán");
-   BookingLine line=new BookingLine();line.productId=p.id;line.name=p.name;line.kind=p.kind;line.unitPrice=p.price;line.quantity=item.quantity();line.includedServices=p.includedServiceIds.stream().sorted().map(id->products.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Dịch vụ trong combo không tồn tại")).name).reduce((a,c)->a+", "+c).orElse("");
+   Product p=products.findById(item.productId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy vé/dịch vụ"));entityManager.refresh(p);require(p.active,"Vé/dịch vụ đã ngừng bán");
+   Product base=p;int issued=item.quantity();Set<Long> serviceIds=new HashSet<>(p.includedServiceIds);
+   if(p.kind==Kind.COMBO){require(p.comboTicketId!=null&&p.comboBuyQuantity!=null&&p.comboBuyQuantity>0&&p.comboGiftQuantity!=null&&p.comboGiftQuantity>=0,"Combo chưa cấu hình đủ loại vé và số lượng");require(item.quantity()>=p.comboBuyQuantity&&item.quantity()%p.comboBuyQuantity==0,"Combo "+p.name+" cần số vé là bội số của "+p.comboBuyQuantity);require(lockIds.contains(p.comboTicketId),"Cấu hình combo vừa thay đổi, vui lòng tạo lại đơn");base=products.findById(p.comboTicketId).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Vé gốc không tồn tại"));entityManager.refresh(base);require(base.kind==Kind.TICKET&&base.active,"Vé gốc của combo đã ngừng bán");issued=Math.addExact(item.quantity(),Math.multiplyExact(item.quantity()/p.comboBuyQuantity,p.comboGiftQuantity));serviceIds.addAll(base.includedServiceIds);}
+   BookingLine line=new BookingLine();line.productId=p.id;line.name=p.name;line.kind=p.kind;line.unitPrice=p.price;line.quantity=item.quantity();line.ticketProductId=p.kind==Kind.SERVICE?null:base.id;line.ticketQuantity=p.kind==Kind.SERVICE?0:issued;line.ticketProductName=p.kind==Kind.SERVICE?null:base.name;line.includedServices=serviceIds.stream().sorted().map(id->products.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Dịch vụ trong combo không tồn tại")).name).reduce((a,c)->a+", "+c).orElse("");
    b.lines.add(line);b.subtotal=b.subtotal.add(p.price.multiply(BigDecimal.valueOf(item.quantity())));hasTicket|=p.kind!=Kind.SERVICE;
   }
   require(hasTicket,"Đơn cần có ít nhất một vé hoặc combo");
