@@ -1,3 +1,4 @@
+import { parseSmileCodes } from "./smile-import.js";
 import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import { api, setCredentials, money, today, labels } from "./api";
@@ -513,6 +514,19 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
                     />
                     <p>{t.visitDate}</p>
                     <code className="break">{t.ticketCode || t.qrToken}</code>
+                    {t.source === "SMILE" && (
+                      <p>
+                        Seri Smile: <b>{t.smileSerial}</b>
+                        <br />
+                        Barcode Smile: <code>{t.smileBarcode}</code>
+                        <br />
+                        <small>
+                          Loại Smile: {t.smileTicketTypeName} (
+                          {t.smileTicketTypeCode}). Chưa đồng bộ Smile; QR trên
+                          vé dùng tại vticket.
+                        </small>
+                      </p>
+                    )}
                     <p className="muted">{t.includedServices}</p>
                     <span className="badge">
                       {t.checkedInAt ? "Đã check-in" : "Chưa sử dụng"}
@@ -1241,7 +1255,18 @@ function BatchManager({ products, run, busy }) {
     [show, setShow] = useState(false),
     [codes, setCodes] = useState(null),
     [state, setState] = useState(""),
-    [search, setSearch] = useState("");
+    [search, setSearch] = useState(""),
+    [source, setSource] = useState("VTICKET"),
+    [smileText, setSmileText] = useState("");
+  let smilePreview = [],
+    smileError = "";
+  if (source === "SMILE" && smileText.trim()) {
+    try {
+      smilePreview = parseSmileCodes(smileText);
+    } catch (e) {
+      smileError = e.message;
+    }
+  }
   const labelsStock = {
     AVAILABLE: "Còn bán",
     RESERVED: "Đang giữ",
@@ -1290,8 +1315,9 @@ function BatchManager({ products, run, busy }) {
         </div>
       </div>
       <p className="muted">
-        Mã nội bộ vticket. Tích hợp Smile PSM sẽ triển khai sau; chưa sử dụng QR
-        này tại cổng Smile.
+        Có thể sinh mã nội bộ hoặc nhập nguyên cặp Seri / barcode từ Smile. Chưa
+        kết nối API Smile; QR PDF hiện vẫn dùng tại vticket, chưa dùng tại cổng
+        Smile.
       </p>
       <div className="stats">
         {[
@@ -1317,22 +1343,42 @@ function BatchManager({ products, run, busy }) {
             e.preventDefault();
             const f = new FormData(e.currentTarget);
             run(async () => {
-              await api("/admin/ticket-batches", {
-                method: "POST",
-                body: {
-                  code: f.get("code").trim().toUpperCase(),
-                  productId: Number(f.get("productId")),
-                  quantity: Number(f.get("quantity")),
-                  validFrom: f.get("validFrom"),
-                  validUntil: f.get("validUntil"),
-                },
-              });
+              const body = {
+                code: f.get("code").trim().toUpperCase(),
+                productId: Number(f.get("productId")),
+                validFrom: f.get("validFrom"),
+                validUntil: f.get("validUntil"),
+              };
+              if (source === "SMILE") {
+                body.smileTicketTypeCode = f.get("smileTicketTypeCode").trim();
+                body.smileTicketTypeName = f.get("smileTicketTypeName").trim();
+                body.codes = parseSmileCodes(smileText);
+                body.smileIsWeekday = f.get("smileIsWeekday") === "on";
+                body.smileIsChild = f.get("smileIsChild") === "on";
+              } else body.quantity = Number(f.get("quantity"));
+              await api(
+                source === "SMILE"
+                  ? "/admin/ticket-batches/import-smile"
+                  : "/admin/ticket-batches",
+                { method: "POST", body },
+              );
               setShow(false);
               await load();
             });
           }}
         >
-          <h3>Tạo lô và sinh mã vé</h3>
+          <h3>
+            {source === "SMILE"
+              ? "Nhập lô vé từ Smile"
+              : "Tạo lô và sinh mã vé"}
+          </h3>
+          <label className="field">
+            Nguồn mã vé
+            <select value={source} onChange={(e) => setSource(e.target.value)}>
+              <option value="VTICKET">Sinh mã nội bộ vticket</option>
+              <option value="SMILE">Nhập Seri / barcode đã có từ Smile</option>
+            </select>
+          </label>
           <div className="two-col">
             <Field
               label="Mã lô (không trùng)"
@@ -1358,16 +1404,18 @@ function BatchManager({ products, run, busy }) {
                   ))}
               </select>
             </label>
-            <Field
-              label="Số lượng mã trong lô"
-              type="number"
-              name="quantity"
-              min="1"
-              max="10000"
-              step="1"
-              defaultValue="100"
-              required
-            />
+            {source === "VTICKET" && (
+              <Field
+                label="Số lượng mã trong lô"
+                type="number"
+                name="quantity"
+                min="1"
+                max="10000"
+                step="1"
+                defaultValue="100"
+                required
+              />
+            )}
             <Field
               label="Ngày sử dụng từ"
               type="date"
@@ -1383,12 +1431,110 @@ function BatchManager({ products, run, busy }) {
               required
             />
           </div>
-          <p className="muted">
-            Mã sinh theo mã lô và số thứ tự. Giá bán được lấy từ danh mục loại
-            vé; thời hạn là khoảng ngày khách được dùng vé.
-          </p>
+          {source === "SMILE" ? (
+            <>
+              <div className="two-col">
+                <Field
+                  label="PkgCode – mã loại vé Smile"
+                  name="smileTicketTypeCode"
+                  maxLength={64}
+                  pattern="[A-Za-z0-9._/-]+"
+                  required
+                />
+                <Field
+                  label="Tên loại vé trên Smile"
+                  name="smileTicketTypeName"
+                  maxLength={150}
+                  required
+                />
+              </div>
+              <div className="two-col">
+                <label>
+                  <input type="checkbox" name="smileIsWeekday" /> IsWeekday – vé
+                  ngày thường
+                </label>
+                <label>
+                  <input type="checkbox" name="smileIsChild" /> IsChild – vé trẻ
+                  em
+                </label>
+              </div>
+              <p className="muted">
+                Hai cờ được lưu theo Smile. Lô có cờ bật chỉ lưu để chuẩn bị
+                tích hợp, chưa cho mở bán khi chưa có quy tắc sử dụng tương ứng.
+              </p>
+              <label className="field">
+                Danh sách Seri và barcode
+                <textarea
+                  rows={7}
+                  value={smileText}
+                  onChange={(e) => setSmileText(e.target.value)}
+                  placeholder={
+                    "Seri\tbarcode\nVN000945\t<barcode gốc từ Smile>"
+                  }
+                  required
+                />
+              </label>
+              <p className="muted">
+                Dán 2 cột Seri, barcode; hoặc 3 cột SeqNo, Serial, BarCode. Có
+                thể dán kết quả SQL kèm hàng tiêu đề đúng tên cột Smile (SeqNo,
+                BarCode, Serial, PkgCode, FromDate, ToDate, IsWeekday, IsChild,
+                IsCancel, IsLoss). Mỗi dòng một vé. Đặt cả hai cột là Text trước
+                khi xuất từ Smile để giữ số 0 đầu. Không tự suy barcode từ Seri.
+                Mỗi lô chỉ gồm một loại vé Smile và cùng thời hạn; chỉ nhập mã
+                chưa bán/chưa dùng đã dành riêng cho kênh web.
+              </p>
+              {smileError ? (
+                <p className="alert">{smileError}</p>
+              ) : (
+                <p>
+                  <b>{smilePreview.length} vé</b> hợp lệ về cấu trúc, số lượng
+                  lấy từ danh sách.
+                </p>
+              )}
+              {!!smilePreview.length && !smileError && (
+                <div className="tablewrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Seri</th>
+                        <th>Barcode</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {smilePreview.slice(0, 5).map((row) => (
+                        <tr key={row.serial}>
+                          <td>{row.serial}</td>
+                          <td>{row.barcode}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="muted">
+                    Xem trước tối đa 5 vé. Hệ thống kiểm tra trùng toàn bộ danh
+                    sách và các lô đã nhập.
+                  </p>
+                </div>
+              )}
+              <p className="alert">
+                Lô Smile mới nhập được tạm dừng để kiểm tra trước khi mở bán.
+                Chưa tự kiểm tra tồn hoặc đồng bộ bán/soát vé với Smile.
+              </p>
+            </>
+          ) : (
+            <p className="muted">
+              Mã sinh theo mã lô và số thứ tự. Giá bán lấy từ danh mục loại vé;
+              thời hạn là khoảng ngày khách được dùng vé.
+            </p>
+          )}
           <div className="tabs">
-            <button disabled={busy}>Tạo lô vé</button>
+            <button
+              disabled={
+                busy ||
+                (source === "SMILE" && (!!smileError || !smilePreview.length))
+              }
+            >
+              {source === "SMILE" ? "Nhập lô Smile (tạm dừng)" : "Tạo lô vé"}
+            </button>
             <button
               type="button"
               className="secondary"
@@ -1423,7 +1569,7 @@ function BatchManager({ products, run, busy }) {
             <tbody>
               {batches
                 .filter(({ batch: b, productName }) =>
-                  `${b.code} ${productName}`
+                  `${b.code} ${productName} ${b.smileTicketTypeCode || ""} ${b.smileTicketTypeName || ""}`
                     .toLowerCase()
                     .includes(search.toLowerCase()),
                 )
@@ -1432,6 +1578,11 @@ function BatchManager({ products, run, busy }) {
                     <td>
                       <b>{b.code}</b>
                       <small>{productName}</small>
+                      <small>
+                        {b.source === "SMILE"
+                          ? `Smile · ${b.smileTicketTypeCode} · ${b.smileTicketTypeName}`
+                          : "Mã nội bộ vticket"}
+                      </small>
                     </td>
                     <td>
                       {b.validFrom}
@@ -1461,6 +1612,14 @@ function BatchManager({ products, run, busy }) {
                         className="secondary compact"
                         onClick={() =>
                           run(async () => {
+                            if (
+                              !b.active &&
+                              b.source === "SMILE" &&
+                              !window.confirm(
+                                "Chưa đồng bộ API Smile. Chỉ mở bán nếu đã kiểm tra mã chưa bán/chưa dùng và dành riêng lô này cho web để tránh bán trùng. QR PDF hiện vẫn soát tại vticket. Tiếp tục mở bán?",
+                              )
+                            )
+                              return;
                             await api(`/admin/ticket-batches/${b.id}/active`, {
                               method: "PUT",
                               body: { active: !b.active },
@@ -1486,6 +1645,16 @@ function BatchManager({ products, run, busy }) {
               <p className="muted">
                 {codes.total} mã theo bộ lọc. Mỗi trang tối đa 100 mã.
               </p>
+              {codes.batch.source === "SMILE" && (
+                <p>
+                  Smile: {codes.batch.smileTicketTypeCode} ·{" "}
+                  {codes.batch.smileTicketTypeName}
+                  <br />
+                  <span className="muted">
+                    Đã lưu thông tin mã; chưa đồng bộ Smile.
+                  </span>
+                </p>
+              )}
             </div>
             <button className="secondary" onClick={() => setCodes(null)}>
               Đóng danh sách
@@ -1509,7 +1678,10 @@ function BatchManager({ products, run, busy }) {
             <table>
               <thead>
                 <tr>
-                  <th>Mã vé</th>
+                  <th>Mã nội bộ</th>
+                  <th>SeqNo Smile</th>
+                  <th>Seri Smile</th>
+                  <th>Barcode Smile</th>
                   <th>Trạng thái</th>
                   <th>Đơn liên quan</th>
                   <th>Thời điểm</th>
@@ -1520,6 +1692,15 @@ function BatchManager({ products, run, busy }) {
                   <tr key={c.id}>
                     <td>
                       <code>{c.code}</code>
+                    </td>
+                    <td>
+                      <code>{c.smileSeqNo || "—"}</code>
+                    </td>
+                    <td>
+                      <code>{c.smileSerial || "—"}</code>
+                    </td>
+                    <td>
+                      <code>{c.smileBarcode || "—"}</code>
                     </td>
                     <td>
                       <span className="badge">{labelsStock[c.state]}</span>

@@ -39,4 +39,10 @@ class SqlServerSmokeTest {
  }
  @Autowired org.springframework.transaction.PlatformTransactionManager transactionManager; @Autowired Bookings bookings;
  private void selectVietQr(String id){new org.springframework.transaction.support.TransactionTemplate(transactionManager).executeWithoutResult(status->bookings.lockId(id).orElseThrow().paymentMethod="VIETQR");}
+
+ @Test void importSmileIdentifiersOnSqlServer(){
+  var p=new Product();p.code="SM-"+UUID.randomUUID().toString().substring(0,20);p.name="Vé Smile SQL";p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(100000);products.saveAndFlush(p);var date=LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));var key=UUID.randomUUID().toString().substring(0,12);var serial="VN"+key;var barcode="0000"+key;
+  var batch=inventory.importSmile(new SmileBatchInput("SM-"+key.toUpperCase(Locale.ROOT),p.id,"SM-01","Loại vé Smile",date,date.plusYears(1),List.of(new SmileCodeInput(serial,barcode))),"admin");assertFalse(batch.active);inventory.active(batch.id,true,"admin");var b=service.create(new OrderInput("Khách Smile","0900000000","",date,"",List.of(new LineInput(p.id,1))),Channel.COUNTER,"staff");service.cash(b.id,"staff");var ticket=service.ticketList(b.id).getFirst();assertEquals(serial,ticket.smileSerial);assertEquals(barcode,ticket.smileBarcode);assertEquals("SM-01",ticket.smileTicketTypeCode);assertEquals("SMILE",ticket.source);
+  assertThrows(org.springframework.dao.DataIntegrityViolationException.class,()->inventory.importSmile(new SmileBatchInput("DUP-"+key.toUpperCase(Locale.ROOT),p.id,"SM-01","Loại vé Smile",date,date.plusYears(1),List.of(new SmileCodeInput(serial,"other-"+key))),"admin"));
+ }
 }

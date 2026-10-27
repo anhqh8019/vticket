@@ -90,3 +90,26 @@ Hai endpoint server-to-server dùng cơ chế riêng, không dùng tài khoản 
 Alias tương thích: `/api/vietqr/token_generate`, `/api/vietqr/transaction-sync`, `/api-vietqr-callback/api-get-token`, `/api-vietqr-callback/api-transaction-sync`. Chi tiết body và cấu hình xem [VIETQR_SETUP.md](VIETQR_SETUP.md).
 
 GET đơn trả `{order, tickets, payment}`; `payment` là null khi chưa tạo VietQR, hoặc chứa orderId (mã VietQR 13 ký tự), state, amount, bankCode, bankAccount, accountName, virtualAccount, content, expiresAt, message. Khách poll mỗi 3 giây khi pending. Tiền mặt chỉ cho đơn COUNTER, STAFF/ADMIN, chưa chọn VietQR. PDF chỉ trả khi PAID. Endpoint `demo-pay` đã xóa.
+
+## Nhập lô Smile
+
+`POST /api/admin/ticket-batches/import-smile` (ADMIN + CSRF):
+
+```json
+{
+  "code": "SMILE-WEB-01",
+  "productId": 3,
+  "smileTicketTypeCode": "MA_LOAI_TU_SMILE",
+  "smileTicketTypeName": "Tên loại vé trên Smile",
+  "validFrom": "2026-10-27",
+  "validUntil": "2027-10-27",
+  "codes": [
+    { "serial": "TEST000001", "barcode": "0000123456789" },
+    { "serial": "TEST000002", "barcode": "0000123456790" }
+  ]
+}
+```
+
+Mã trong ví dụ là dữ liệu minh họa, không phải mã Smile hợp lệ. Không gửi quantity: server tính theo codes. Hai cờ smileIsWeekday/smileIsChild mặc định false; cờ true chỉ cho lưu lô tạm dừng. Mỗi phần tử codes có thể thêm seqNo (chuỗi số tối đa 19 ký tự), pkgCode, fromDate, toDate, isWeekday, isChild, isCancel, isLoss; server kiểm tra khớp cấu hình lô và từ chối mã hủy/báo mất. Response là TicketBatch với source=SMILE, active=false. Kiểm tra và mở bán qua endpoint active hiện có. Ngày hết hạn không được trước ngày hiện tại. Không cho nhập SERVICE. Trùng/vi phạm ràng buộc trả 409, body sai trả 400; toàn bộ import rollback khi có lỗi.
+
+GET `/api/admin/ticket-batches/{id}/codes` giữ phân trang/bộ lọc cũ, bổ sung smileSerial, smileBarcode từng mã và smileTicketTypeCode/Name trên batch. GET đơn đã trả tiền bổ sung source, smileSerial, smileBarcode, smileTicketTypeCode/Name trên vé đã cấp. Không endpoint nào trong phần này thực hiện kết nối hoặc đồng bộ Smile.

@@ -36,3 +36,7 @@ Flyway V2 thêm bảng kho/lô và trường liên kết, không xóa vé hay đ
 **Sau khi nâng cấp, tạo lô cho từng loại vé trước khi bán.** Database demo mới có lô mẫu 100 mã/loại; database đã có danh mục không tự sinh lô để tránh tạo nhầm mã trên dữ liệu khách hàng.
 
 Ngày dùng và hạn lô theo ngày Việt Nam. Mốc giữ/bán/check-in lưu UTC. Đơn giới hạn 500 vé để giữ PDF và thao tác cấp mã ở quy mô phù hợp; đây là giới hạn mỗi đơn, không phải hạn mức khách theo ngày/giờ.
+
+## Lô nhập từ Smile
+
+Ngoài mã nội bộ, hỗ trợ nhập danh sách cặp Seri/barcode có sẵn, kèm mã/tên loại vé Smile và liên kết loại vé trên web. Mỗi vé đã bán giữ snapshot các thông tin này. Lô mới nhập tạm dừng; thao tác nhập và kiểm tra trùng là nguyên tử. Không tự tạo barcode Smile, không thay QR PDF hiện tại. Chi tiết hướng dẫn và giới hạn vận hành xem [SMILE_INTEGRATION.md](SMILE_INTEGRATION.md).

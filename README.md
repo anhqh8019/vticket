@@ -138,3 +138,7 @@ Xem [hướng dẫn lô vé và PDF](docs/TICKET_BATCHES.md). Smile sẽ tích h
 Khách online chỉ chuyển khoản VietQR; nhân viên bán tại quầy chọn tiền mặt hoặc VietQR. Backend lấy token và tạo QR động từ API VietQR; callback xác thực riêng xác nhận tiền vào, sau đó cấp đúng mã vé đã giữ và mở tải PDF. Không xác nhận từ nút bấm của khách. Flyway V3 bổ sung giao dịch và danh sách đối soát; giữ nguyên dữ liệu cũ.
 
 Cấu hình, URL callback, kiểm tra sandbox và xử lý chuyển khoản sai/hết hạn: [docs/VIETQR_SETUP.md](docs/VIETQR_SETUP.md). Tích hợp Smile PSM vẫn để giai đoạn sau.
+
+## Chuẩn bị dữ liệu Smile
+
+Màn hình lô vé hỗ trợ **nhập Seri / barcode gốc từ Smile**, mã/tên loại vé Smile, thời hạn và liên kết loại vé bán trên web. Giữ nguyên số 0 đầu, kiểm tra trùng và lưu đúng mã theo vé đã bán. Lô nhập mới tạm dừng để kiểm tra; chưa đồng bộ API hoặc soát QR qua cổng Smile. Xem [hướng dẫn nhập lô Smile](docs/SMILE_INTEGRATION.md).

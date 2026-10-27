@@ -1,0 +1,42 @@
+package vn.venusgiti.vticket;
+
+import org.junit.jupiter.api.*;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
+import java.math.BigDecimal;
+import java.time.*;
+import java.util.*;
+import static org.junit.jupiter.api.Assertions.*;
+import vn.venusgiti.vticket.Domain.*;
+import vn.venusgiti.vticket.Requests.*;
+
+@SpringBootTest(properties={"spring.datasource.url=jdbc:h2:mem:smile;MODE=MSSQLServer;DB_CLOSE_DELAY=-1","app.seed-data=false","app.vietqr.enabled=false"})
+@ActiveProfiles("demo")
+class SmileInventoryIntegrationTest {
+ @Autowired InventoryService inventory; @Autowired Products products; @Autowired TicketBatches batches; @Autowired TicketStock stock; @Autowired BookingService bookings;
+ private LocalDate date(){return LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));}
+ private Product product(Kind kind){var p=new Product();p.code="SM-"+UUID.randomUUID().toString().substring(0,20);p.name="Vé Smile";p.kind=kind;p.price=BigDecimal.valueOf(100000);return products.saveAndFlush(p);}
+ private SmileBatchInput input(Product p,List<SmileCodeInput> rows){return new SmileBatchInput("SM-"+UUID.randomUUID().toString().substring(0,20).toUpperCase(Locale.ROOT),p.id,"SM-TYPE-01","Tắm khoáng Smile",date(),date().plusYears(1),rows);}
+ private List<SmileCodeInput> uniqueRows(){var key=UUID.randomUUID().toString().substring(0,12);return List.of(new SmileCodeInput("VN"+key,"0000"+key));}
+ @Test void importKeepsExactCodesAndSnapshotsPaidTicket(){
+  var p=product(Kind.TICKET);var rows=uniqueRows();var batch=inventory.importSmile(input(p,rows),"admin");assertFalse(batch.active);assertEquals("SMILE",batch.source);assertEquals(1,batch.quantity);
+  var code=stock.findByBatchIdOrderByCodeAsc(batch.id,org.springframework.data.domain.PageRequest.of(0,100)).getContent().getFirst();assertEquals(rows.getFirst().serial(),code.smileSerial);assertEquals(rows.getFirst().barcode(),code.smileBarcode);assertNotEquals(code.smileBarcode,code.qrToken);
+  var order=new OrderInput("Khách Smile","0900000000","",date(),"",List.of(new LineInput(p.id,1)));
+  assertThrows(org.springframework.web.server.ResponseStatusException.class,()->bookings.create(order,Channel.COUNTER,"staff"));
+  inventory.active(batch.id,true,"admin");var b=bookings.create(order,Channel.COUNTER,"staff");bookings.cash(b.id,"staff");var t=bookings.ticketList(b.id).getFirst();assertEquals(rows.getFirst().serial(),t.smileSerial);assertEquals(rows.getFirst().barcode(),t.smileBarcode);assertEquals("SM-TYPE-01",t.smileTicketTypeCode);assertEquals("Tắm khoáng Smile",t.smileTicketTypeName);assertEquals("SMILE",t.source);assertEquals(StockState.SOLD,stock.findById(code.id).orElseThrow().state);bookings.checkIn(t.qrToken,"staff");assertEquals(StockState.USED,stock.findById(code.id).orElseThrow().state);
+ }
+ @Test void duplicateSerialInsideFileRejectsWholeBatch(){var p=product(Kind.TICKET);long before=batches.count();assertThrows(org.springframework.web.server.ResponseStatusException.class,()->inventory.importSmile(input(p,List.of(new SmileCodeInput("VN001","00001"),new SmileCodeInput("VN001","00002"))),"admin"));assertEquals(before,batches.count());}
+ @Test void duplicateBarcodeInsideFileRejectsWholeBatch(){var p=product(Kind.TICKET);assertThrows(org.springframework.web.server.ResponseStatusException.class,()->inventory.importSmile(input(p,List.of(new SmileCodeInput("VN001","00001"),new SmileCodeInput("VN002","00001"))),"admin"));}
+ @Test void importingExistingCodeRollsBackNewBatchAndEarlierRows(){var p=product(Kind.TICKET);var rows=uniqueRows();inventory.importSmile(input(p,rows),"admin");long batchCount=batches.count(),stockCount=stock.count();var newRow=uniqueRows().getFirst();assertThrows(org.springframework.dao.DataIntegrityViolationException.class,()->inventory.importSmile(input(p,List.of(newRow,new SmileCodeInput(rows.getFirst().serial(),"other-"+UUID.randomUUID()))),"admin"));assertEquals(batchCount,batches.count());assertEquals(stockCount,stock.count());}
+ @Test void existingBarcodeIsAlsoUniqueAcrossProducts(){var first=product(Kind.TICKET);var row=uniqueRows().getFirst();inventory.importSmile(input(first,List.of(row)),"admin");var second=product(Kind.COMBO);assertThrows(org.springframework.dao.DataIntegrityViolationException.class,()->inventory.importSmile(input(second,List.of(new SmileCodeInput("NEW"+UUID.randomUUID(),row.barcode()))),"admin"));}
+ @Test void serviceCannotHaveSmileBatch(){var p=product(Kind.SERVICE);assertThrows(org.springframework.web.server.ResponseStatusException.class,()->inventory.importSmile(input(p,uniqueRows()),"admin"));}
+ @Test void cancelReleasesSameSmileIdentifiers(){var p=product(Kind.TICKET);var row=uniqueRows().getFirst();var batch=inventory.importSmile(input(p,List.of(row)),"admin");inventory.active(batch.id,true,"admin");var order=new OrderInput("Khách","0900000000","",date(),"",List.of(new LineInput(p.id,1)));var first=bookings.create(order,Channel.COUNTER,"staff");bookings.cancel(first.id,"staff",false);var second=bookings.create(order,Channel.COUNTER,"staff");bookings.cash(second.id,"staff");assertEquals(row.barcode(),bookings.ticketList(second.id).getFirst().smileBarcode);}
+ @Test void internalBatchesStillAllowManyNullSmileCodes(){var p=product(Kind.TICKET);var batch=inventory.createBatch(new BatchInput("VT-"+UUID.randomUUID().toString().substring(0,20).toUpperCase(Locale.ROOT),p.id,3,date(),date().plusYears(1)),"admin");assertEquals(3,stock.countByBatchIdAndState(batch.id,StockState.AVAILABLE));assertEquals("VTICKET",batch.source);assertNull(batch.smileTicketTypeCode);}
+
+ @Test void smileSourceFieldsAreCheckedAndSeqNoSaved(){var p=product(Kind.TICKET);var row=uniqueRows().getFirst();var in=input(p,List.of(new SmileCodeInput(row.serial(),row.barcode(),"1","SM-TYPE-01",date(),date().plusYears(1),false,false,false,false)));var batch=inventory.importSmile(in,"admin");assertEquals("1",stock.findByBatchIdOrderByCodeAsc(batch.id,org.springframework.data.domain.PageRequest.of(0,100)).getContent().getFirst().smileSeqNo);}
+ @Test void mismatchedPkgDateAndCancelledOrLostCodesRejected(){var p=product(Kind.TICKET);var row=uniqueRows().getFirst();
+  for(var wrong:List.of(new SmileCodeInput(row.serial(),row.barcode(),"1","WRONG",null,null,null,null,null,null),new SmileCodeInput(row.serial(),row.barcode(),"1",null,date().plusDays(1),null,null,null,null,null),new SmileCodeInput(row.serial(),row.barcode(),"1",null,null,null,null,null,true,false),new SmileCodeInput(row.serial(),row.barcode(),"1",null,null,null,null,null,false,true)))assertThrows(org.springframework.web.server.ResponseStatusException.class,()->inventory.importSmile(input(p,List.of(wrong)),"admin"));
+ }
+ @Test void childAndWeekdayBatchesStayPausedUntilRulesImplemented(){var p=product(Kind.TICKET);for(boolean child:List.of(true,false)){var base=input(p,uniqueRows());var batch=inventory.importSmile(new SmileBatchInput(base.code(),p.id,base.smileTicketTypeCode(),base.smileTicketTypeName(),date(),date().plusYears(1),base.codes(),!child,child),"admin");assertThrows(org.springframework.web.server.ResponseStatusException.class,()->inventory.active(batch.id,true,"admin"));assertFalse(batches.findById(batch.id).orElseThrow().active);}}
+}

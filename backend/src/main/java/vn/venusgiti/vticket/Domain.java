@@ -78,6 +78,14 @@ public final class Domain {
   @Column(length=36) public String stockId;
   @Column(length=64) public String ticketCode;
   @Column(length=40) public String batchCode;
+  @Column(length=20) public String source;
+  @Column(length=64) public String smileSeqNo;
+  @Column(length=64) public String smileSerial;
+  @Column(length=128) public String smileBarcode;
+  @Column(length=64) public String smileTicketTypeCode;
+  @Column(length=150) public String smileTicketTypeName;
+  public Boolean smileIsWeekday;
+  public Boolean smileIsChild;
   @Column(nullable=false,length=150) public String productName;
   @Column(nullable=false,length=1000) public String includedServices;
   @Column(nullable=false) public LocalDate visitDate;
@@ -95,6 +103,10 @@ public final class Domain {
   @Column(nullable=false) public LocalDate validUntil;
   @Column(nullable=false) public boolean active=true;
   @Column(nullable=false,length=20) public String source="VTICKET";
+  @Column(length=64) public String smileTicketTypeCode;
+  @Column(length=150) public String smileTicketTypeName;
+  public Boolean smileIsWeekday;
+  public Boolean smileIsChild;
   @Column(nullable=false) public Instant createdAt;
   @Column(nullable=false,length=100) public String createdBy;
  }
@@ -105,6 +117,9 @@ public final class Domain {
   @Column(nullable=false) public Long productId;
   @Column(nullable=false,unique=true,length=64) public String code;
   @Column(nullable=false,unique=true,length=36) public String qrToken;
+  @Column(length=64) public String smileSeqNo;
+  @Column(length=64) public String smileSerial;
+  @Column(length=128) public String smileBarcode;
   @Enumerated(EnumType.STRING) @Column(nullable=false,length=16) public StockState state=StockState.AVAILABLE;
   @Column(length=36) public String reservedOrderId;
   public Instant reservedUntil;
