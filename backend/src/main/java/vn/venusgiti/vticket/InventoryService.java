@@ -45,7 +45,7 @@ public class InventoryService {
   stock.flush();Audit a=new Audit();a.happenedAt=clock.instant();a.actor=actor;a.action="SMILE_BATCH_IMPORTED";a.target=b.code;audits.save(a);return b;
  }
  private void assignIdentifiers(StockCode code,TicketIdentifierCounter counter){
-  while(true){require(counter.nextValue<=999999999L,"Đã hết dải mã nội bộ. Liên hệ quản trị để mở dải mới.");long number=counter.nextValue++;String serial="VT"+String.format(Locale.ROOT,"%010d",number),barcode=Long.toString(1000000000L+number);
+  while(true){require(counter.nextValue<=999999999L,"Đã hết dải mã nội bộ. Liên hệ quản trị để mở dải mới.");long number=counter.nextValue++;String serial="VN"+String.format(Locale.ROOT,"%010d",number),barcode=Long.toString(1000000000L+number);
    if(stock.existsBySmileSerial(serial)||stock.existsBySmileBarcode(barcode))continue;
    code.smileSerial=serial;code.smileBarcode=barcode;return;
   }
