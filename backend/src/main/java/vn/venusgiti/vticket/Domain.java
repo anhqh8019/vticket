@@ -169,6 +169,8 @@ public final class Domain {
  }
  @Entity(name="PaymentCallbackLock") @Table(name="payment_callback_lock")
  public static class PaymentCallbackLock { @Id public Integer id; }
+ @Entity(name="TicketIdentifierCounter") @Table(name="ticket_identifier_counter")
+ public static class TicketIdentifierCounter { @Id public Integer id; @Column(nullable=false) public long nextValue; }
  @Entity(name="Audit") @Table(name="audit_events")
  public static class Audit {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id;

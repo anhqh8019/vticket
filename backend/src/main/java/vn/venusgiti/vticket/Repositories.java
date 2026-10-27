@@ -17,8 +17,9 @@ interface Bookings extends JpaRepository<Booking,String> {
  List<Booking> findByStatusAndExpiresAtBefore(Status status,Instant cutoff);
 }
 interface Tickets extends JpaRepository<Ticket,String> {
+ @Modifying @Query("update Ticket t set t.smileSerial=:serial,t.smileBarcode=:barcode where t.stockId=:stockId and t.smileSerial is null and t.smileBarcode is null") int fillIdentifiers(@Param("stockId") String stockId,@Param("serial") String serial,@Param("barcode") String barcode);
  List<Ticket> findByBookingId(String id);
- @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select t from Ticket t where t.qrToken=:token or t.ticketCode=:code") Optional<Ticket> lockTokenOrCode(@Param("token") String token,@Param("code") String code);
+ @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select t from Ticket t where t.qrToken=:token or t.ticketCode=:code or t.smileBarcode=:token or t.smileSerial=:token") Optional<Ticket> lockTokenOrCode(@Param("token") String token,@Param("code") String code);
 }
 interface Audits extends JpaRepository<Audit,Long> { List<Audit> findTop100ByOrderByHappenedAtDesc(); }
 
@@ -33,6 +34,9 @@ interface TicketStock extends JpaRepository<StockCode,String> {
  @Query("select s.batchId,s.state,count(s) from StockCode s where s.batchId in :ids group by s.batchId,s.state") List<Object[]> counts(@Param("ids") List<String> ids);
  org.springframework.data.domain.Page<StockCode> findByBatchIdOrderByCodeAsc(String id,org.springframework.data.domain.Pageable page);
  org.springframework.data.domain.Page<StockCode> findByBatchIdAndStateOrderByCodeAsc(String id,StockState state,org.springframework.data.domain.Pageable page);
+ List<StockCode> findByBatchIdOrderByCodeAsc(String id);
+ boolean existsBySmileSerial(String serial);
+ boolean existsBySmileBarcode(String barcode);
  long countByBatchIdAndState(String id,StockState state);
 }
 
@@ -44,4 +48,8 @@ interface PaymentReceipts extends JpaRepository<PaymentReceipt,String> {
 }
 interface CallbackLocks extends JpaRepository<PaymentCallbackLock,Integer> {
  @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select l from PaymentCallbackLock l where l.id=1") PaymentCallbackLock acquire();
+}
+
+interface TicketIdentifierCounters extends JpaRepository<TicketIdentifierCounter,Integer> {
+ @Lock(LockModeType.PESSIMISTIC_WRITE) @Query("select c from TicketIdentifierCounter c where c.id=1") TicketIdentifierCounter acquire();
 }

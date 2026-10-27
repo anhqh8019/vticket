@@ -514,6 +514,13 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
                     />
                     <p>{t.visitDate}</p>
                     <code className="break">{t.ticketCode || t.qrToken}</code>
+                    {t.source !== "SMILE" && t.smileSerial && (
+                      <p>
+                        Seri: <b>{t.smileSerial}</b>
+                        <br />
+                        Barcode: <code>{t.smileBarcode}</code>
+                      </p>
+                    )}
                     {t.source === "SMILE" && (
                       <p>
                         Seri Smile: <b>{t.smileSerial}</b>
@@ -1522,8 +1529,9 @@ function BatchManager({ products, run, busy }) {
             </>
           ) : (
             <p className="muted">
-              Mã sinh theo mã lô và số thứ tự. Giá bán lấy từ danh mục loại vé;
-              thời hạn là khoảng ngày khách được dùng vé.
+              Mỗi vé có mã nội bộ, Seri và barcode riêng được tự sinh. Giá bán
+              lấy từ danh mục loại vé; thời hạn là khoảng ngày khách được dùng
+              vé.
             </p>
           )}
           <div className="tabs">
@@ -1607,6 +1615,25 @@ function BatchManager({ products, run, busy }) {
                       >
                         Xem mã
                       </button>
+                      {b.source === "VTICKET" && (
+                        <button
+                          className="secondary compact"
+                          disabled={busy}
+                          onClick={() =>
+                            run(async () => {
+                              await api(
+                                `/admin/ticket-batches/${b.id}/generate-identifiers`,
+                                { method: "POST" },
+                              );
+                              await load();
+                              if (codes?.batch.id === b.id)
+                                await view(b.id, state, codes.page);
+                            })
+                          }
+                        >
+                          Bổ sung Seri / barcode
+                        </button>
+                      )}
                       <button
                         disabled={busy}
                         className="secondary compact"
@@ -1680,8 +1707,8 @@ function BatchManager({ products, run, busy }) {
                 <tr>
                   <th>Mã nội bộ</th>
                   <th>SeqNo Smile</th>
-                  <th>Seri Smile</th>
-                  <th>Barcode Smile</th>
+                  <th>Seri</th>
+                  <th>Barcode</th>
                   <th>Trạng thái</th>
                   <th>Đơn liên quan</th>
                   <th>Thời điểm</th>

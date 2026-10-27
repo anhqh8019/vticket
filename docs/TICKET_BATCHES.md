@@ -40,3 +40,11 @@ Ngày dùng và hạn lô theo ngày Việt Nam. Mốc giữ/bán/check-in lưu 
 ## Lô nhập từ Smile
 
 Ngoài mã nội bộ, hỗ trợ nhập danh sách cặp Seri/barcode có sẵn, kèm mã/tên loại vé Smile và liên kết loại vé trên web. Mỗi vé đã bán giữ snapshot các thông tin này. Lô mới nhập tạm dừng; thao tác nhập và kiểm tra trùng là nguyên tử. Không tự tạo barcode Smile, không thay QR PDF hiện tại. Chi tiết hướng dẫn và giới hạn vận hành xem [SMILE_INTEGRATION.md](SMILE_INTEGRATION.md).
+
+## Seri và barcode cho lô tự tạo
+
+Lô nguồn VTICKET mới tự sinh Seri dạng VT0000000001 và barcode số 10 chữ số, duy nhất trong kho. Dải mã dùng bộ đếm có khóa giao dịch, bỏ qua mã đã có trong kho Smile. Đây là mã do vticket phát hành, chưa được đăng ký/kích hoạt ở Smile; không giả định cổng Smile chấp nhận.
+
+Với lô cũ đang trống mã: bấm **Bổ sung Seri / barcode**. Chỉ bổ sung cặp còn thiếu, giữ nguyên mã nội bộ và QR, không đổi mã đã có; không áp dụng cho lô nhập Smile. Vé đã bán thiếu cả hai trường cũng được bổ sung theo mã kho. Sau thanh toán, PDF có QR, barcode Code 128 và Seri. vticket nhận quét cả QR, barcode hoặc Seri và vẫn kiểm tra đơn PAID/ngày dùng/một lần sử dụng.
+
+Các thuộc tính API hiện dùng tên smileSerial/smileBarcode để tương thích dữ liệu nguồn; source phân biệt VTICKET với SMILE. SeqNo Smile không tự sinh vì chỉ hệ thống Smile cấp định danh nguồn. Nút bổ sung dùng POST /api/admin/ticket-batches/{id}/generate-identifiers (ADMIN + CSRF).

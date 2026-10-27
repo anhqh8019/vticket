@@ -15,6 +15,7 @@ public class InventoryController {
  @GetMapping("/admin/ticket-batches") public List<Map<String,Object>> batches(){return inventory.list();}
  @PostMapping("/admin/ticket-batches") public TicketBatch create(@Valid @RequestBody BatchInput in,Authentication a){return inventory.createBatch(in,a.getName());}
  @PostMapping("/admin/ticket-batches/import-smile") public TicketBatch importSmile(@Valid @RequestBody SmileBatchInput in,Authentication a){return inventory.importSmile(in,a.getName());}
+ @PostMapping("/admin/ticket-batches/{id}/generate-identifiers") public TicketBatch generateIdentifiers(@PathVariable String id,Authentication a){return inventory.generateIdentifiers(id,a.getName());}
  @GetMapping("/admin/ticket-batches/{id}/codes") public Map<String,Object> codes(@PathVariable String id,@RequestParam(required=false) StockState state,@RequestParam(defaultValue="0") int page){return inventory.codes(id,state,page);}
  @PutMapping("/admin/ticket-batches/{id}/active") public TicketBatch active(@PathVariable String id,@Valid @RequestBody BatchActiveInput in,Authentication a){return inventory.active(id,in.active(),a.getName());}
  @GetMapping(value="/public/orders/{token}/tickets.pdf",produces=MediaType.APPLICATION_PDF_VALUE)

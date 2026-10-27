@@ -33,11 +33,16 @@ public class TicketPdfService {
      text(canvas,font,10,24,348,"VÉ ĐIỆN TỬ - "+t.visitDate,Color.DARK_GRAY);
      wrap(canvas,font,t.productName,13,24,325,250,2);
      var matrix=new MultiFormatWriter().encode(t.qrToken,BarcodeFormat.QR_CODE,600,600,Map.of(EncodeHintType.MARGIN,4,EncodeHintType.ERROR_CORRECTION,com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M));
-     var image=LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix));canvas.drawImage(image,63,126,172,172);
+     var image=LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix));canvas.drawImage(image,74,157,150,150);
      String code=t.ticketCode==null?t.id:t.ticketCode;
-     wrap(canvas,font,"Mã vé: "+code,9,24,111,250,2);
-     text(canvas,font,9,24,79,"Đơn: "+b.id.substring(0,8).toUpperCase(Locale.ROOT),Color.DARK_GRAY);
-     if(t.batchCode!=null)text(canvas,font,9,24,64,"Lô: "+t.batchCode,Color.DARK_GRAY);
+     if(t.smileBarcode!=null){
+      var bars=new MultiFormatWriter().encode(t.smileBarcode,BarcodeFormat.CODE_128,1200,180,Map.of(EncodeHintType.MARGIN,20));
+      canvas.drawImage(LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(bars)),24,104,250,37);
+      wrap(canvas,font,"Barcode: "+t.smileBarcode,8,24,92,250,1);
+     }
+     wrap(canvas,font,"Seri: "+(t.smileSerial==null?code:t.smileSerial),9,24,77,250,1);
+     wrap(canvas,font,"Mã vé: "+code,8,24,63,250,1);
+     wrap(canvas,font,"Đơn: "+b.id.substring(0,8).toUpperCase(Locale.ROOT)+(t.batchCode==null?"":" | Lô: "+t.batchCode),8,24,51,250,1);
      text(canvas,font,8,24,39,"Mỗi mã vé sử dụng một lần, đúng ngày ghi trên vé.",Color.DARK_GRAY);
      text(canvas,font,8,24,24,"Quét tại hệ thống vticket. Chưa kết nối Smile PSM.",Color.DARK_GRAY);
     }
