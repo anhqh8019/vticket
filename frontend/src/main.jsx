@@ -1392,7 +1392,9 @@ function BatchManager({ products, run, busy }) {
     [search, setSearch] = useState(""),
     [source, setSource] = useState("VTICKET"),
     [smileText, setSmileText] = useState(""),
-    [smileStatus, setSmileStatus] = useState(null);
+    [smileStatus, setSmileStatus] = useState(null),
+    [batchProductId, setBatchProductId] = useState("");
+  const batchProduct = products.find((p) => String(p.id) === batchProductId);
   let smilePreview = [],
     smileError = "";
   if (source === "SMILE" && smileText.trim()) {
@@ -1495,10 +1497,6 @@ function BatchManager({ products, run, busy }) {
                 body.smileIsChild = f.get("smileIsChild") === "on";
               } else {
                 body.quantity = Number(f.get("quantity"));
-                body.smileTicketTypeCode =
-                  f.get("internalSmilePkg")?.trim() || null;
-                body.smileTicketTypeName =
-                  f.get("internalSmileName")?.trim() || null;
               }
               await api(
                 source === "SMILE"
@@ -1534,7 +1532,7 @@ function BatchManager({ products, run, busy }) {
             />
             <label className="field">
               Loại vé
-              <select name="productId" required defaultValue="">
+              <select name="productId" required value={batchProductId} onChange={(e) => setBatchProductId(e.target.value)}>
                 <option value="" disabled>
                   Chọn loại vé
                 </option>
@@ -1581,20 +1579,20 @@ function BatchManager({ products, run, busy }) {
                 <Field
                   label="PkgCode trên Smile"
                   name="internalSmilePkg"
-                  maxLength={64}
-                  pattern="[A-Za-z0-9._/-]+"
-                  required={!!smileStatus?.enabled}
+                  value={batchProduct?.code || ""}
+                  readOnly
                 />
                 <Field
                   label="Tên loại vé trên Smile"
                   name="internalSmileName"
-                  maxLength={150}
+                  value={batchProduct?.name || ""}
+                  readOnly
                 />
               </div>
               <p className="muted">
                 {smileStatus?.enabled
                   ? "Lô mới sẽ được ghi ngay sang Smile và tạm dừng bán. Khi đồng bộ thành công, kiểm tra rồi mở bán lô."
-                  : "Có thể điền mã loại vé Smile để chuẩn bị tích hợp."}
+                  : "Mã và tên lấy từ loại vé đã chọn. Mã loại vé phải trùng mã trên Smile."}
               </p>
             </>
           )}
@@ -2048,7 +2046,7 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           label={
             catalogType === "services"
               ? "Mã dịch vụ"
-              : "Mã loại vé (không phải mã vé vào cổng)"
+              : "Mã loại vé (nhập đúng mã trên Smile)"
           }
           name="code"
           defaultValue={product?.code}

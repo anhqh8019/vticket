@@ -29,7 +29,7 @@ File CSV 100 bản ghi gần nhất xác nhận BarCode có 9–10 chữ số, S
 | ------------------------------------------------------------ | -------------------------------------------------------------------------- |
 | SeqNo                                                        | Do IDENTITY hoặc DEFAULT của Smile cấp; sau ghi đọc lại và lưu vào vticket |
 | BarCode, Serial                                              | Theo chế độ ánh xạ trên                                                    |
-| PkgCode                                                      | Điền mã loại vé Smile trên lô, không suy từ tên sản phẩm                   |
+| PkgCode                                                      | Tự lấy mã loại vé đã chọn (Product.code); khi tạo loại vé phải nhập đúng mã Smile                   |
 | FromDate, ToDate                                             | Thời hạn lô, ngày SQL lúc 00:00:00                                         |
 | IsWeekday, IsChild                                           | Cờ đang lưu trên lô, mặc định false khi chưa đặt                           |
 | Note                                                         | VTICKET + mã lô, cắt theo độ dài cột nếu cần                               |
@@ -65,7 +65,7 @@ HotelID luôn được truyền SQL NULL khi INSERT vé mới, kể cả môi tr
 ## Cách dùng
 
 1. Cấu hình và khởi động lại backend. Quản trị → Smile Onsen → kiểm tra mapping, bấm Kiểm tra kết nối và cấu trúc bảng. Bước này chỉ đọc metadata, không ghi vé thử.
-2. Tạo lô nguồn vticket, chọn đúng loại vé gốc và điền PkgCode Smile. Toàn bộ mã vào hàng đợi PENDING, lô tạm dừng bán. Chưa cần thanh toán.
+2. Tạo lô nguồn vticket, chọn đúng loại vé gốc ; PkgCode và tên Smile tự lấy từ mã/tên loại vé đã chọn, không nhập lại. Toàn bộ mã vào hàng đợi PENDING, lô tạm dừng bán. Chưa cần thanh toán.
 3. Worker chạy mỗi 5 giây, trạng thái SYNCING → SYNCED hoặc FAILED. Khi SYNCED, kiểm tra trên Smile rồi chủ động Mở bán lô.
 4. Muốn đồng bộ lô cũ: Lô vé & mã vé → Xem mã → Đồng bộ lô sang Smile. Chỉ lô chưa có mã giữ/bán/dùng và đã có đủ Seri/barcode mới được xếp hàng. Nếu có lỗi kết nối, giữ nguyên PkgCode và bấm Xếp hàng / thử lại.
 5. Cổng Smile hiện nhận thời hạn lô FromDate/ToDate, không tự nhận ngày sử dụng riêng của từng đơn vì lô được đẩy trước khi bán. Muốn Smile chặn đúng ngày đặt trên web cần thêm luồng cập nhật/kích hoạt sau bán, chưa triển khai trong module này.
@@ -92,4 +92,4 @@ Tất cả cần ADMIN; POST cần CSRF như các thao tác ứng dụng khác.
 - POST `/api/admin/smile/connection-test`: đọc metadata và kiểm tra điều kiện ghi, không INSERT.
 - GET `/api/admin/smile/jobs`: 200 lô đồng bộ gần nhất, số lần thử, lỗi đã lọc thông tin kết nối.
 - POST `/api/admin/smile/batches/{id}/sync`: `{ "pkgCode": "HK", "typeName": "Hoàng Kim" }`, xếp hàng/thử lại lô đủ điều kiện.
-- POST `/api/admin/ticket-batches`: thêm `smileTicketTypeCode`, `smileTicketTypeName` khi nguồn vticket. PkgCode bắt buộc khi SMILE_ENABLED=true.
+- POST `/api/admin/ticket-batches`: khi nguồn vticket, backend tự chụp mã/tên từ loại vé đã chọn; không sử dụng mã/tên Smile do client gửi. Lô cũ giữ nguyên thông tin đã chụp.
