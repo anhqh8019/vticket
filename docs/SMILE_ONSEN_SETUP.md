@@ -8,14 +8,20 @@ Tính năng mặc định tắt. Chưa có kết nối/kiểm thử trên databa
 
 ## Hai cách ánh xạ định danh
 
-Ảnh mới có BarCode=VN…, Serial=mã số; CSV mẫu có BarCode=mã số, Serial=VN…. Không suy kiểu dữ liệu hoặc tự đổi lịch sử từ các mẫu này. Biến SMILE_CODE_MAPPING chọn rõ:
+CSV là dữ liệu chuẩn đã được khách hàng xác nhận: **BarCode=mã số, Serial=VN…**. Ảnh chụp trước đó bị sai, không dùng làm căn cứ ánh xạ. Mặc định SMILE_CODE_MAPPING=FIELD_NAMES:
 
 | Chế độ                                              | TicketOnsen.BarCode    | TicketOnsen.Serial     |
 | --------------------------------------------------- | ---------------------- | ---------------------- |
-| VN_AS_BARCODE (mặc định, theo lựa chọn đã xác nhận) | Seri VN… của vticket   | Barcode số của vticket |
-| FIELD_NAMES (theo CSV mẫu)                          | Barcode số của vticket | Seri VN… của vticket   |
+| VN_AS_BARCODE (tùy chọn cũ, không dùng cho CSV chuẩn) | Seri VN… của vticket   | Barcode số của vticket |
+| FIELD_NAMES (mặc định, theo CSV chuẩn)                          | Barcode số của vticket | Seri VN… của vticket   |
+
+Nếu môi trường đã đặt `SMILE_CODE_MAPPING=VN_AS_BARCODE`, cần đổi thành `FIELD_NAMES` và khởi động lại backend. Lô đã xếp hàng giữ ánh xạ cũ; thay đổi mặc định không tự sửa lô hoặc dữ liệu đã ghi sang Smile. Tạm dừng worker và đối soát các lô này trước khi tiếp tục, không thử lại theo ánh xạ sai.
 
 Cách ánh xạ được chụp trên lô lúc xếp hàng, không tự đổi theo cấu hình sau đó. Barcode cổng trả về được lưu riêng ở `smileGateBarcode`; PDF sau bán dùng đúng barcode này. QR vticket vẫn có để dùng tại vticket; không khẳng định QR đó là QR Smile. Lô nhập từ Smile tiếp tục giữ nguyên barcode nguồn.
+
+## Dữ liệu chuẩn đối chiếu
+
+File CSV 100 bản ghi gần nhất xác nhận BarCode có 9–10 chữ số, Serial dạng VN015298 (VN + 6 chữ số). Giữ định danh dưới dạng chuỗi, không ép sang số nguyên 32 bit, không đổi hoặc cắt mã đã có. Ví dụ: BarCode=1171411923, Serial=VN015298. Toàn bộ mẫu có PkgCode=HK, IsWeekday=1, IsChild=0, Disabled=0; IsCancel, IsLoss, HotelID là NULL. Đây là dữ liệu của các lô mẫu, không phải mặc định cho mọi sản phẩm. Không suy quy tắc ngày thường hoặc cách cấp SeqNo từ CSV. Cách sinh Seri nội bộ hiện có không thay đổi trong bản sửa ánh xạ này.
 
 ## Các cột TicketOnsen
 
@@ -46,7 +52,7 @@ Module đọc metadata thật để kiểm tra các cột bắt buộc, độ d�
 | SMILE_DB_USERNAME / SMILE_DB_PASSWORD | Tài khoản riêng của kết nối Smile                                 |
 | SMILE_SCHEMA                          | dbo mặc định                                                      |
 | SMILE_TABLE                           | TicketOnsen mặc định                                              |
-| SMILE_CODE_MAPPING                    | VN_AS_BARCODE hoặc FIELD_NAMES                                    |
+| SMILE_CODE_MAPPING                    | FIELD_NAMES (mặc định); VN_AS_BARCODE chỉ dành cho cấu hình cũ                                    |
 | SMILE_HOTEL_ID                        | Đúng HotelID Smile nếu cần                                        |
 | SMILE_CLERK_ID                        | Đúng mã nhân viên/tích hợp Smile nếu cần                          |
 | SMILE_WORKER_ENABLED                  | true mặc định, false để tạm dừng worker khi bảo trì               |

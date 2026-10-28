@@ -38,7 +38,7 @@ app:
     table: ${SMILE_TABLE:TicketOnsen}
     hotel-id: ${SMILE_HOTEL_ID:}
     clerk-id: ${SMILE_CLERK_ID:}
-    code-mapping: ${SMILE_CODE_MAPPING:VN_AS_BARCODE}
+    code-mapping: ${SMILE_CODE_MAPPING:FIELD_NAMES}
     worker-enabled: ${SMILE_WORKER_ENABLED:true}
   vietqr:
     enabled: ${VIETQR_ENABLED:false}
