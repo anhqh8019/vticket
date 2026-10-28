@@ -23,6 +23,6 @@ public class InventoryController {
  @GetMapping(value="/public/orders/{token}/tickets.zip",produces="application/zip")
  public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> zip(@PathVariable String token){
   var paid=pdf.prepare(token); // Authorize PAID and snapshot all scalar data before starting the asynchronous response.
-  return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"Venusgiti-tickets.zip\"").cacheControl(CacheControl.noStore()).body(output->pdf.writeZip(paid,output));
+  return ResponseEntity.ok().contentType(MediaType.parseMediaType("application/zip")).header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"Venusgiti-tickets.zip\"").cacheControl(CacheControl.noStore()).body(output->pdf.writeZip(paid,output));
  }
 }
