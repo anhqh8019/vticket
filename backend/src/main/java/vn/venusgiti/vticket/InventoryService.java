@@ -20,7 +20,7 @@ public class InventoryService {
  public TicketBatch createBatch(BatchInput in,String actor){
   lockProducts(List.of(in.productId()));Product p=products.findById(in.productId()).orElseThrow();
   require(p.kind==Kind.TICKET,"Chỉ tạo lô cho vé; combo dùng kho của loại vé tham chiếu");require(!in.validUntil().isBefore(in.validFrom()),"Ngày hết hạn phải từ ngày bắt đầu trở đi");require(!in.validUntil().isBefore(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))),"Lô vé đã hết hạn");
-  TicketBatch b=new TicketBatch();b.id=UUID.randomUUID().toString();b.code=in.code();b.productId=p.id;b.quantity=in.quantity();b.validFrom=in.validFrom();b.validUntil=in.validUntil();b.smileTicketTypeCode=in.smileTicketTypeCode();b.smileTicketTypeName=in.smileTicketTypeName();b.createdAt=clock.instant();b.createdBy=actor;batches.saveAndFlush(b);
+  TicketBatch b=new TicketBatch();b.id=UUID.randomUUID().toString();b.code=in.code();b.productId=p.id;b.quantity=in.quantity();b.validFrom=in.validFrom();b.validUntil=in.validUntil();b.smileTicketTypeCode=in.smileTicketTypeCode();b.smileTicketTypeName=in.smileTicketTypeName();b.createdAt=clock.instant();b.createdBy=actor;b=batches.saveAndFlush(b);
   var counter=counters.acquire();
   for(int i=1;i<=in.quantity();i++){StockCode s=new StockCode();s.id=UUID.randomUUID().toString();s.batchId=b.id;s.productId=p.id;s.code=b.code+"-"+String.format(Locale.ROOT,"%06d",i);s.qrToken=UUID.randomUUID().toString();assignIdentifiers(s,counter);stock.save(s);}
   stock.flush();smileQueue.created(b);
@@ -41,7 +41,7 @@ public class InventoryService {
   }
   lockProducts(List.of(in.productId()));Product p=products.findById(in.productId()).orElseThrow();
   require(p.kind==Kind.TICKET,"Chỉ tạo lô cho vé; combo dùng kho của loại vé tham chiếu");require(!in.validUntil().isBefore(in.validFrom()),"Ngày hết hạn phải từ ngày bắt đầu trở đi");require(!in.validUntil().isBefore(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))),"Lô vé đã hết hạn");
-  TicketBatch b=new TicketBatch();b.id=UUID.randomUUID().toString();b.code=in.code();b.productId=p.id;b.quantity=in.codes().size();b.validFrom=in.validFrom();b.validUntil=in.validUntil();b.source="SMILE";b.active=false;b.smileIsWeekday=in.smileIsWeekday();b.smileIsChild=in.smileIsChild();b.smileTicketTypeCode=in.smileTicketTypeCode();b.smileTicketTypeName=in.smileTicketTypeName().strip();b.createdAt=clock.instant();b.createdBy=actor;batches.saveAndFlush(b);
+  TicketBatch b=new TicketBatch();b.id=UUID.randomUUID().toString();b.code=in.code();b.productId=p.id;b.quantity=in.codes().size();b.validFrom=in.validFrom();b.validUntil=in.validUntil();b.source="SMILE";b.active=false;b.smileIsWeekday=in.smileIsWeekday();b.smileIsChild=in.smileIsChild();b.smileTicketTypeCode=in.smileTicketTypeCode();b.smileTicketTypeName=in.smileTicketTypeName().strip();b.createdAt=clock.instant();b.createdBy=actor;b=batches.saveAndFlush(b);
   int index=0;for(var row:in.codes()){StockCode code=new StockCode();code.id=UUID.randomUUID().toString();code.batchId=b.id;code.productId=p.id;code.code=b.code+"-"+String.format(Locale.ROOT,"%06d",++index);code.qrToken=UUID.randomUUID().toString();code.smileSeqNo=row.seqNo();code.smileSerial=row.serial();code.smileBarcode=row.barcode();stock.save(code);}
   stock.flush();Audit a=new Audit();a.happenedAt=clock.instant();a.actor=actor;a.action="SMILE_BATCH_IMPORTED";a.target=b.code;audits.save(a);return b;
  }
