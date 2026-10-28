@@ -36,7 +36,7 @@ File CSV 100 bản ghi gần nhất xác nhận BarCode có 9–10 chữ số, S
 | IsCancel, IsLoss, Disabled                                   | false cho bản ghi mới                                                      |
 | CreateTime, LastChangeTime                                   | Thời gian tạo theo Asia/Ho_Chi_Minh                                        |
 | CreateClerkID, LastChangeClerkID                             | SMILE_CLERK_ID nếu đã cấu hình; nếu chưa, để database áp DEFAULT/NULL      |
-| HotelID                                                      | SMILE_HOTEL_ID nếu đã cấu hình; nếu chưa, để DEFAULT/NULL                  |
+| HotelID                                                      | Luôn ghi SQL NULL, không dùng cấu hình hoặc DEFAULT của cột                  |
 | CancelTime, CancelBy, CancelNote, LossTime, LossBy, LossNote | Không cấp giá trị, để DEFAULT/NULL của bảng                                |
 
 Module đọc metadata thật để kiểm tra các cột bắt buộc, độ dài, nullability và cách sinh SeqNo. Nếu SeqNo không có IDENTITY/DEFAULT, module từ chối ghi và yêu cầu DDL/quy tắc cấp số từ Smile; **không dùng MAX+1**. Không tự sửa schema Smile. Nếu cột bắt buộc không có DEFAULT/NULL và chưa có cách cấp giá trị, kiểm tra kết nối sẽ báo rõ tên cột.
@@ -53,13 +53,14 @@ Module đọc metadata thật để kiểm tra các cột bắt buộc, độ d�
 | SMILE_SCHEMA                          | dbo mặc định                                                      |
 | SMILE_TABLE                           | TicketOnsen mặc định                                              |
 | SMILE_CODE_MAPPING                    | FIELD_NAMES (mặc định); VN_AS_BARCODE chỉ dành cho cấu hình cũ                                    |
-| SMILE_HOTEL_ID                        | Đúng HotelID Smile nếu cần                                        |
 | SMILE_CLERK_ID                        | Đúng mã nhân viên/tích hợp Smile nếu cần                          |
 | SMILE_WORKER_ENABLED                  | true mặc định, false để tạm dừng worker khi bảo trì               |
 
 Ví dụ URL (thay host/port thực tế): `jdbc:sqlserver://<host>:1433;databaseName=SMILE_ONSEN;encrypt=true;trustServerCertificate=false`. Dùng chứng chỉ tin cậy khi triển khai thật. Chỉ bật trustServerCertificate=true cho môi trường thử nghiệm đã xác định. Tài khoản cần đọc metadata/SELECT và INSERT trên đúng bảng; không cần quyền xóa, sửa vé hoặc đổi cấu trúc. Không dùng tài khoản sa khi vận hành.
 
 DB_URL/DB_USERNAME/DB_PASSWORD vẫn trỏ database **VTICKET** như trước. Không đổi các biến chính sang SMILE_ONSEN; Flyway V7 chỉ chạy trên database vticket để thêm hàng đợi và dấu đồng bộ.
+
+HotelID luôn được truyền SQL NULL khi INSERT vé mới, kể cả môi trường còn cấu hình cũ `SMILE_HOTEL_ID` hoặc cột có DEFAULT. Không kiểm tra giá trị HotelID. Các bản ghi đã có trên Smile không bị sửa.
 
 ## Cách dùng
 
