@@ -58,7 +58,7 @@ public class TicketPdfService {
      wrap(canvas,font,"Mã vé: "+code,8,24,63,250,1);
      wrap(canvas,font,"Đơn: "+b.id.substring(0,8).toUpperCase(Locale.ROOT)+(t.batchCode==null?"":" | Lô: "+t.batchCode),8,24,51,250,1);
      text(canvas,font,8,24,39,"Mỗi mã vé sử dụng một lần, đúng ngày ghi trên vé.",Color.DARK_GRAY);
-     text(canvas,font,8,24,24,"Quét tại hệ thống vticket. Chưa kết nối Smile PSM.",Color.DARK_GRAY);
+     text(canvas,font,8,24,24,"Quét tại hệ thống Venusgiti Onsen",Color.DARK_GRAY);
     }
    }
    document.getDocumentInformation().setTitle("Vé điện tử Venusgiti");document.save(output);return output.toByteArray();
@@ -77,3 +77,4 @@ public class TicketPdfService {
   }
  }
 }
+
