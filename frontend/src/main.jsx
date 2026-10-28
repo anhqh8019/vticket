@@ -600,14 +600,16 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
                       <p>
                         Seri: <b>{t.smileSerial}</b>
                         <br />
-                        Barcode: <code>{t.smileBarcode}</code>
+                        Barcode:{" "}
+                        <code>{t.smileGateBarcode || t.smileBarcode}</code>
                       </p>
                     )}
                     {t.source === "SMILE" && (
                       <p>
                         Seri Smile: <b>{t.smileSerial}</b>
                         <br />
-                        Barcode Smile: <code>{t.smileBarcode}</code>
+                        Barcode Smile:{" "}
+                        <code>{t.smileGateBarcode || t.smileBarcode}</code>
                         <br />
                         <small>
                           Loại Smile: {t.smileTicketTypeName} (
@@ -1036,6 +1038,7 @@ function Manage({ run, busy, refreshCatalog }) {
           ["batches", "Lô vé & mã vé"],
           ["vouchers", "Voucher khách hàng"],
           ["receipts", "Đối soát VietQR"],
+          ["smile", "Smile Onsen"],
           ["audit", "Nhật ký"],
         ].map(([k, l]) => (
           <button
@@ -1175,6 +1178,7 @@ function Manage({ run, busy, refreshCatalog }) {
         <BatchManager products={products} run={run} busy={busy} />
       )}
       {tab === "receipts" && <PaymentReceipts run={run} />}
+      {tab === "smile" && <SmilePanel run={run} busy={busy} />}
       {tab === "vouchers" && (
         <>
           <div className="row">
@@ -1387,7 +1391,8 @@ function BatchManager({ products, run, busy }) {
     [state, setState] = useState(""),
     [search, setSearch] = useState(""),
     [source, setSource] = useState("VTICKET"),
-    [smileText, setSmileText] = useState("");
+    [smileText, setSmileText] = useState(""),
+    [smileStatus, setSmileStatus] = useState(null);
   let smilePreview = [],
     smileError = "";
   if (source === "SMILE" && smileText.trim()) {
@@ -1404,7 +1409,10 @@ function BatchManager({ products, run, busy }) {
     USED: "Đã sử dụng",
   };
   const load = () =>
-    run(async () => setBatches(await api("/admin/ticket-batches")));
+    run(async () => {
+      setBatches(await api("/admin/ticket-batches"));
+      setSmileStatus(await api("/admin/smile/status"));
+    });
   useEffect(() => {
     load();
   }, []);
@@ -1485,7 +1493,13 @@ function BatchManager({ products, run, busy }) {
                 body.codes = parseSmileCodes(smileText);
                 body.smileIsWeekday = f.get("smileIsWeekday") === "on";
                 body.smileIsChild = f.get("smileIsChild") === "on";
-              } else body.quantity = Number(f.get("quantity"));
+              } else {
+                body.quantity = Number(f.get("quantity"));
+                body.smileTicketTypeCode =
+                  f.get("internalSmilePkg")?.trim() || null;
+                body.smileTicketTypeName =
+                  f.get("internalSmileName")?.trim() || null;
+              }
               await api(
                 source === "SMILE"
                   ? "/admin/ticket-batches/import-smile"
@@ -1561,6 +1575,29 @@ function BatchManager({ products, run, busy }) {
               required
             />
           </div>
+          {source === "VTICKET" && (
+            <>
+              <div className="two-col">
+                <Field
+                  label="PkgCode trên Smile"
+                  name="internalSmilePkg"
+                  maxLength={64}
+                  pattern="[A-Za-z0-9._/-]+"
+                  required={!!smileStatus?.enabled}
+                />
+                <Field
+                  label="Tên loại vé trên Smile"
+                  name="internalSmileName"
+                  maxLength={150}
+                />
+              </div>
+              <p className="muted">
+                {smileStatus?.enabled
+                  ? "Lô mới sẽ được ghi ngay sang Smile và tạm dừng bán. Khi đồng bộ thành công, kiểm tra rồi mở bán lô."
+                  : "Có thể điền mã loại vé Smile để chuẩn bị tích hợp."}
+              </p>
+            </>
+          )}
           {source === "SMILE" ? (
             <>
               <div className="two-col">
@@ -1709,6 +1746,9 @@ function BatchManager({ products, run, busy }) {
                     <td>
                       <b>{b.code}</b>
                       <small>{productName}</small>
+                      {b.smileSyncState && (
+                        <small>Smile: {b.smileSyncState}</small>
+                      )}
                       <small>
                         {b.source === "SMILE"
                           ? `Smile · ${b.smileTicketTypeCode} · ${b.smileTicketTypeName}`
@@ -1810,6 +1850,59 @@ function BatchManager({ products, run, busy }) {
               Đóng danh sách
             </button>
           </div>
+          {codes.batch.source === "VTICKET" && smileStatus?.enabled && (
+            <form
+              className="panel"
+              key={codes.batch.id + "-smile"}
+              onSubmit={(e) => {
+                e.preventDefault();
+                const f = new FormData(e.currentTarget);
+                run(async () => {
+                  await api(`/admin/smile/batches/${codes.batch.id}/sync`, {
+                    method: "POST",
+                    body: {
+                      pkgCode: f.get("pkgCode").trim(),
+                      typeName: f.get("typeName").trim(),
+                    },
+                  });
+                  await load();
+                  await view(codes.batch.id, state, codes.page);
+                });
+              }}
+            >
+              <h3>Đồng bộ lô sang Smile</h3>
+              <p>
+                Trạng thái: {codes.batch.smileSyncState || "Chưa đồng bộ"}. Chỉ
+                áp dụng cho lô chưa giữ/bán/dùng mã. Đồng bộ xong, kiểm tra và
+                bấm Mở bán.
+              </p>
+              <div className="two-col">
+                <Field
+                  name="pkgCode"
+                  label="PkgCode Smile"
+                  defaultValue={codes.batch.smileTicketTypeCode || ""}
+                  pattern="[A-Za-z0-9._/-]+"
+                  maxLength={64}
+                  required
+                  readOnly={!!codes.batch.smileSyncState}
+                />
+                <Field
+                  name="typeName"
+                  label="Tên loại vé Smile"
+                  defaultValue={codes.batch.smileTicketTypeName || ""}
+                  maxLength={150}
+                />
+              </div>
+              <button
+                disabled={
+                  busy ||
+                  ["SYNCED", "SYNCING"].includes(codes.batch.smileSyncState)
+                }
+              >
+                Xếp hàng / thử lại đồng bộ
+              </button>
+            </form>
+          )}
           <label className="field">
             Lọc trạng thái
             <select
@@ -1831,7 +1924,8 @@ function BatchManager({ products, run, busy }) {
                   <th>Mã nội bộ</th>
                   <th>SeqNo Smile</th>
                   <th>Seri</th>
-                  <th>Barcode</th>
+                  <th>Barcode số nội bộ</th>
+                  <th>Barcode cổng Smile</th>
                   <th>Trạng thái</th>
                   <th>Đơn liên quan</th>
                   <th>Thời điểm</th>
@@ -1851,6 +1945,14 @@ function BatchManager({ products, run, busy }) {
                     </td>
                     <td>
                       <code>{c.smileBarcode || "—"}</code>
+                    </td>
+                    <td>
+                      <code>
+                        {c.smileGateBarcode ||
+                          (codes.batch.source === "SMILE"
+                            ? c.smileBarcode
+                            : "—")}
+                      </code>
                     </td>
                     <td>
                       <span className="badge">{labelsStock[c.state]}</span>
@@ -2150,3 +2252,109 @@ function VoucherForm({ save, busy }) {
   );
 }
 createRoot(document.getElementById("root")).render(<App />);
+
+function SmilePanel({ run, busy }) {
+  const [status, setStatus] = useState(null),
+    [jobs, setJobs] = useState([]),
+    [check, setCheck] = useState(null);
+  const labels = {
+    PENDING: "Chờ đồng bộ",
+    SYNCING: "Đang ghi sang Smile",
+    SYNCED: "Đã đồng bộ",
+    FAILED: "Cần kiểm tra / thử lại",
+  };
+  const load = () =>
+    run(async () => {
+      setStatus(await api("/admin/smile/status"));
+      setJobs(await api("/admin/smile/jobs"));
+    });
+  useEffect(() => {
+    load();
+  }, []);
+  return (
+    <>
+      <div className="row">
+        <div>
+          <h2>Tích hợp Smile Onsen</h2>
+          <p>
+            Ghi toàn bộ mã ngay khi tạo lô. Không tự thay đổi trạng thái
+            bán/soát/hủy bên Smile.
+          </p>
+        </div>
+        <button className="secondary" onClick={load} disabled={busy}>
+          Làm mới
+        </button>
+      </div>
+      <div className="panel">
+        <p>
+          {status?.enabled ? "Tích hợp đã bật" : "Tích hợp đang tắt"} ·{" "}
+          {status?.configured
+            ? "Đã khai báo kết nối"
+            : "Chưa đủ cấu hình kết nối"}
+        </p>
+        <p>
+          Bảng: {status?.schema}.{status?.table}
+          <br />
+          Ánh xạ:{" "}
+          {status?.mapping === "FIELD_NAMES"
+            ? "BarCode = mã số; Serial = VN…"
+            : "BarCode = VN…; Serial = mã số"}
+        </p>
+        <button
+          disabled={busy || !status?.enabled || !status?.configured}
+          onClick={() =>
+            run(async () =>
+              setCheck(
+                await api("/admin/smile/connection-test", { method: "POST" }),
+              ),
+            )
+          }
+        >
+          Kiểm tra kết nối và cấu trúc bảng
+        </button>
+        {check && (
+          <p className={check.ok ? "muted" : "alert"}>
+            {check.ok
+              ? "Kết nối và các cột bắt buộc hợp lệ; chưa ghi dữ liệu thử."
+              : check.message}
+          </p>
+        )}
+        <p className="muted">
+          Lô chờ/lỗi đồng bộ không được mở bán. Vào Lô vé & mã vé → Xem mã để
+          kiểm tra PkgCode và thử lại. Sau khi thành công mới chủ động mở bán.
+        </p>
+      </div>
+      <div className="panel tablewrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Lô (ID)</th>
+              <th>Trạng thái</th>
+              <th>Số lần thử</th>
+              <th>Thời gian</th>
+              <th>Chi tiết</th>
+            </tr>
+          </thead>
+          <tbody>
+            {jobs.map((j) => (
+              <tr key={j.batchId}>
+                <td className="break">{j.batchId}</td>
+                <td>{labels[j.state] || j.state}</td>
+                <td>{j.attempts}</td>
+                <td>
+                  {new Date(j.syncedAt || j.createdAt).toLocaleString("vi-VN")}
+                </td>
+                <td>
+                  {j.lastError ||
+                    (j.state === "SYNCED"
+                      ? "Đã ghi/đối chiếu toàn bộ mã"
+                      : "Đang chờ xử lý nền")}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}

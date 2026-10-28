@@ -29,6 +29,17 @@ app:
   staff-user: ${STAFF_USER:staff}
   staff-password: ${STAFF_PASSWORD:}
   seed-data: false
+  smile:
+    enabled: ${SMILE_ENABLED:false}
+    jdbc-url: ${SMILE_DB_URL:}
+    username: ${SMILE_DB_USERNAME:}
+    password: ${SMILE_DB_PASSWORD:}
+    schema: ${SMILE_SCHEMA:dbo}
+    table: ${SMILE_TABLE:TicketOnsen}
+    hotel-id: ${SMILE_HOTEL_ID:}
+    clerk-id: ${SMILE_CLERK_ID:}
+    code-mapping: ${SMILE_CODE_MAPPING:VN_AS_BARCODE}
+    worker-enabled: ${SMILE_WORKER_ENABLED:true}
   vietqr:
     enabled: ${VIETQR_ENABLED:false}
     client:

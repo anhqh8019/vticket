@@ -49,10 +49,11 @@ public class TicketPdfService {
      var matrix=new MultiFormatWriter().encode(t.qrToken,BarcodeFormat.QR_CODE,600,600,Map.of(EncodeHintType.MARGIN,4,EncodeHintType.ERROR_CORRECTION,com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M));
      var image=LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix));canvas.drawImage(image,74,157,150,150);
      String code=t.ticketCode==null?t.id:t.ticketCode;
-     if(t.smileBarcode!=null){
-      var bars=new MultiFormatWriter().encode(t.smileBarcode,BarcodeFormat.CODE_128,1200,180,Map.of(EncodeHintType.MARGIN,20));
+     String gateBarcode=t.smileGateBarcode==null?t.smileBarcode:t.smileGateBarcode;
+     if(gateBarcode!=null){
+      var bars=new MultiFormatWriter().encode(gateBarcode,BarcodeFormat.CODE_128,1200,180,Map.of(EncodeHintType.MARGIN,20));
       canvas.drawImage(LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(bars)),24,104,250,37);
-      wrap(canvas,font,"Barcode: "+t.smileBarcode,8,24,92,250,1);
+      wrap(canvas,font,"Barcode: "+gateBarcode,8,24,92,250,1);
      }
      wrap(canvas,font,"Seri: "+(t.smileSerial==null?code:t.smileSerial),9,24,77,250,1);
      wrap(canvas,font,"Mã vé: "+code,8,24,63,250,1);

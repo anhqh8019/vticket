@@ -11,7 +11,7 @@ import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import java.time.Clock;
 import org.springframework.core.annotation.Order;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-@Configuration @EnableConfigurationProperties(VietQrProperties.class)
+@Configuration @EnableConfigurationProperties({VietQrProperties.class,SmileProperties.class})
 public class SecurityConfig {
  @Bean Clock clock() { return Clock.systemUTC(); }
  @Bean UserDetailsService users(@Value("${app.admin-user}") String admin,@Value("${app.admin-password}") String password,@Value("${app.staff-user}") String staff,@Value("${app.staff-password}") String staffPassword) {

@@ -12,7 +12,9 @@ public final class Requests {
  public record VoucherInput(@NotBlank @Size(max=150) String customerName,@NotBlank @Pattern(regexp="[+0-9 -]{9,20}") String phone,@Min(1) @Max(100) int percentage,@NotNull Instant validFrom,@NotNull Instant validUntil,@Size(max=500) String note) {}
  public record LineInput(@NotNull Long productId,@Min(1) @Max(1000) int quantity) {}
  public record OrderInput(@NotBlank @Size(max=150) String customerName,@NotBlank @Pattern(regexp="[+0-9 -]{9,20}") String phone,@Email @Size(max=254) String email,@NotNull LocalDate visitDate,@Size(max=64) String voucherCode,@NotEmpty @Size(max=30) List<@Valid LineInput> lines) {}
- public record BatchInput(@NotBlank @Size(max=40) @Pattern(regexp="[A-Z0-9_-]+") String code,@NotNull Long productId,@Min(1) @Max(10000) int quantity,@NotNull LocalDate validFrom,@NotNull LocalDate validUntil) {}
+ public record BatchInput(@NotBlank @Size(max=40) @Pattern(regexp="[A-Z0-9_-]+") String code,@NotNull Long productId,@Min(1) @Max(10000) int quantity,@NotNull LocalDate validFrom,@NotNull LocalDate validUntil,@Size(max=64) @Pattern(regexp="[A-Za-z0-9._/-]+") String smileTicketTypeCode,@Size(max=150) String smileTicketTypeName) {
+  public BatchInput(String code,Long productId,int quantity,LocalDate validFrom,LocalDate validUntil){this(code,productId,quantity,validFrom,validUntil,null,null);}
+ }
  public record SmileCodeInput(@NotBlank @Size(max=64) @Pattern(regexp="[A-Za-z0-9._/-]+") String serial,@NotBlank @Size(max=128) @Pattern(regexp="[A-Za-z0-9._/-]+") String barcode,@Size(max=64) @Pattern(regexp="[0-9]{1,19}") String seqNo,@Size(max=64) String pkgCode,LocalDate fromDate,LocalDate toDate,Boolean isWeekday,Boolean isChild,Boolean isCancel,Boolean isLoss) {
   public SmileCodeInput(String serial,String barcode){this(serial,barcode,null,null,null,null,null,null,null,null);}
  }

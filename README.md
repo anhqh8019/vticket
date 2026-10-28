@@ -150,3 +150,7 @@ Quản trị tách tab Vé / Combo / Dịch vụ. Combo tham chiếu một loạ
 ## Combo đại lý 300 / 500 vé
 
 Đã hỗ trợ cấu hình và mua combo 300/500 vé. Sau thanh toán, khách tải ZIP gồm các PDF riêng (mỗi vé một file có Seri/barcode/QR) để phân phối lại. Giới hạn thực tế mỗi đơn 1.000 vé gồm vé tặng; mỗi vé giữ ngày dùng theo đơn gốc và chỉ sử dụng một lần. Trang chỉ xem trước 20 vé để tránh tải hàng trăm ảnh QR; ZIP luôn chứa toàn bộ vé.
+
+## Module Smile Onsen
+
+Đã bổ sung kết nối SQL Server riêng và hàng đợi ghi lô ngay khi tạo vào dbo.TicketOnsen. Mặc định tắt; cấu hình trong [docs/SMILE_ONSEN_SETUP.md](docs/SMILE_ONSEN_SETUP.md). Có tab quản trị Smile Onsen để kiểm tra kết nối/schema và xem lỗi. Lô chờ/lỗi chưa mở bán; barcode PDF lấy theo mapping đã đồng bộ. Chưa kết nối database Smile thật của khách hàng hoặc đồng bộ trạng thái soát/hủy/hoàn tiền.

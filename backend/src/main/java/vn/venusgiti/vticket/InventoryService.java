@@ -11,8 +11,8 @@ import vn.venusgiti.vticket.Requests.*;
 
 @Service @Transactional
 public class InventoryService {
- private final Products products; private final TicketBatches batches; private final TicketStock stock; private final Tickets tickets; private final Audits audits; private final Clock clock; private final TicketIdentifierCounters counters;
- InventoryService(Products p,TicketBatches b,TicketStock s,Tickets t,Audits a,Clock c,TicketIdentifierCounters ids){products=p;batches=b;stock=s;tickets=t;audits=a;clock=c;counters=ids;}
+ private final Products products; private final TicketBatches batches; private final TicketStock stock; private final Tickets tickets; private final Audits audits; private final Clock clock; private final TicketIdentifierCounters counters;private final SmileProperties smile;private final SmileSyncQueue smileQueue;
+ InventoryService(Products p,TicketBatches b,TicketStock s,Tickets t,Audits a,Clock c,TicketIdentifierCounters ids,SmileProperties sm,SmileSyncQueue queue){products=p;batches=b;stock=s;tickets=t;audits=a;clock=c;counters=ids;smile=sm;smileQueue=queue;}
  private void require(boolean c,String m){BookingService.require(c,m);}
  public void lockProducts(Collection<Long> ids){ids.stream().distinct().sorted().forEach(id->products.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy vé/dịch vụ")));}
  public void lockBooking(Booking b){var ids=new ArrayList<Long>();for(var l:b.lines){ids.add(l.productId);if(l.ticketProductId!=null)ids.add(l.ticketProductId);}lockProducts(ids);}
@@ -20,9 +20,10 @@ public class InventoryService {
  public TicketBatch createBatch(BatchInput in,String actor){
   lockProducts(List.of(in.productId()));Product p=products.findById(in.productId()).orElseThrow();
   require(p.kind==Kind.TICKET,"Chỉ tạo lô cho vé; combo dùng kho của loại vé tham chiếu");require(!in.validUntil().isBefore(in.validFrom()),"Ngày hết hạn phải từ ngày bắt đầu trở đi");require(!in.validUntil().isBefore(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))),"Lô vé đã hết hạn");
-  TicketBatch b=new TicketBatch();b.id=UUID.randomUUID().toString();b.code=in.code();b.productId=p.id;b.quantity=in.quantity();b.validFrom=in.validFrom();b.validUntil=in.validUntil();b.createdAt=clock.instant();b.createdBy=actor;batches.saveAndFlush(b);
+  TicketBatch b=new TicketBatch();b.id=UUID.randomUUID().toString();b.code=in.code();b.productId=p.id;b.quantity=in.quantity();b.validFrom=in.validFrom();b.validUntil=in.validUntil();b.smileTicketTypeCode=in.smileTicketTypeCode();b.smileTicketTypeName=in.smileTicketTypeName();b.createdAt=clock.instant();b.createdBy=actor;batches.saveAndFlush(b);
   var counter=counters.acquire();
   for(int i=1;i<=in.quantity();i++){StockCode s=new StockCode();s.id=UUID.randomUUID().toString();s.batchId=b.id;s.productId=p.id;s.code=b.code+"-"+String.format(Locale.ROOT,"%06d",i);s.qrToken=UUID.randomUUID().toString();assignIdentifiers(s,counter);stock.save(s);}
+  stock.flush();smileQueue.created(b);
   Audit a=new Audit();a.happenedAt=clock.instant();a.actor=actor;a.action="BATCH_CREATED";a.target=b.code;audits.save(a);return b;
  }
  /** Import exact Smile identifiers; never infer barcodes from serial numbers. New imports are paused for review. */
@@ -59,7 +60,7 @@ public class InventoryService {
   int total=b.lines.stream().filter(l->l.kind!=Kind.SERVICE).mapToInt(this::ticketCount).sum();require(total<=1000,"Tối đa 1.000 vé trong một đơn, gồm vé tặng");
   for(BookingLine l:b.lines)if(l.kind!=Kind.SERVICE){
    for(StockCode old:stock.expired(ticketProduct(l),StockState.RESERVED,clock.instant()))reset(old);
-   stock.flush();var available=stock.available(ticketProduct(l),StockState.AVAILABLE,b.visitDate,PageRequest.of(0,ticketCount(l)));
+   stock.flush();var available=stock.available(ticketProduct(l),StockState.AVAILABLE,b.visitDate,smile.enabled(),PageRequest.of(0,ticketCount(l)));
    require(available.size()==ticketCount(l),"Không đủ mã vé cho "+l.name+" vào ngày đã chọn. Vui lòng tạo/bổ sung lô vé hoặc giảm số lượng.");
    for(var s:available){s.state=StockState.RESERVED;s.reservedOrderId=b.id;s.reservedUntil=b.expiresAt;}
   }
@@ -68,12 +69,12 @@ public class InventoryService {
  private Long ticketProduct(BookingLine l){return l.ticketProductId==null?l.productId:l.ticketProductId;}
  private int ticketCount(BookingLine l){return l.ticketQuantity==null?l.quantity:l.ticketQuantity;}
  private Map<Long,Long> expected(Booking b){Map<Long,Long> counts=new HashMap<>();for(var l:b.lines)if(l.kind!=Kind.SERVICE)counts.merge(ticketProduct(l),(long)ticketCount(l),Long::sum);return counts;}
- public boolean reservationValid(Booking b,Instant at){Map<Long,Long> actual=new HashMap<>();for(var row:stock.reserved(b.id)){if(row.state!=StockState.RESERVED||row.reservedUntil==null||!row.reservedUntil.isAfter(at))return false;actual.merge(row.productId,1L,Long::sum);}return expected(b).equals(actual);}
+ public boolean reservationValid(Booking b,Instant at){Map<Long,Long> actual=new HashMap<>();for(var row:stock.reserved(b.id)){if(row.state!=StockState.RESERVED||row.reservedUntil==null||!row.reservedUntil.isAfter(at))return false;if(smile.enabled()){var batch=batches.findById(row.batchId).orElseThrow();if(!"SMILE".equals(batch.source)&&!"SYNCED".equals(batch.smileSyncState))return false;}actual.merge(row.productId,1L,Long::sum);}return expected(b).equals(actual);}
  public void issue(Booking b,Instant at){
   var reserved=stock.reserved(b.id);Map<Long,Long> actual=new HashMap<>();Map<Long,Deque<StockCode>> queues=new HashMap<>();for(var row:reserved){actual.merge(row.productId,1L,Long::sum);queues.computeIfAbsent(row.productId,key->new ArrayDeque<>()).add(row);}
   require(expected(b).equals(actual),"Đơn không còn đủ mã vé đang giữ. Vui lòng hủy đơn và đặt lại.");
   for(var l:b.lines)if(l.kind!=Kind.SERVICE)for(int n=0;n<ticketCount(l);n++){var s=queues.get(ticketProduct(l)).removeFirst();require(s.state==StockState.RESERVED&&s.reservedUntil.isAfter(at),"Mã vé đã hết thời gian giữ");var batch=batches.findById(s.batchId).orElseThrow();s.state=StockState.SOLD;s.soldOrderId=b.id;s.soldAt=at;s.reservedOrderId=null;s.reservedUntil=null;
-   Ticket t=new Ticket();t.id=UUID.randomUUID().toString();t.stockId=s.id;t.ticketCode=s.code;t.batchCode=batch.code;t.source=batch.source;t.smileSeqNo=s.smileSeqNo;t.smileIsWeekday=batch.smileIsWeekday;t.smileIsChild=batch.smileIsChild;t.smileSerial=s.smileSerial;t.smileBarcode=s.smileBarcode;t.smileTicketTypeCode=batch.smileTicketTypeCode;t.smileTicketTypeName=batch.smileTicketTypeName;t.qrToken=s.qrToken;t.bookingId=b.id;t.productName=l.ticketProductName==null?l.name:l.ticketProductName;t.includedServices=l.includedServices;t.visitDate=b.visitDate;tickets.save(t);
+   Ticket t=new Ticket();t.id=UUID.randomUUID().toString();t.stockId=s.id;t.ticketCode=s.code;t.batchCode=batch.code;t.source=batch.source;t.smileSeqNo=s.smileSeqNo;t.smileGateBarcode=s.smileGateBarcode;t.smileIsWeekday=batch.smileIsWeekday;t.smileIsChild=batch.smileIsChild;t.smileSerial=s.smileSerial;t.smileBarcode=s.smileBarcode;t.smileTicketTypeCode=batch.smileTicketTypeCode;t.smileTicketTypeName=batch.smileTicketTypeName;t.qrToken=s.qrToken;t.bookingId=b.id;t.productName=l.ticketProductName==null?l.name:l.ticketProductName;t.includedServices=l.includedServices;t.visitDate=b.visitDate;tickets.save(t);
   }
  }
  public void used(Ticket t){if(t.stockId!=null){var s=stock.lockId(t.stockId).orElseThrow();require(s.state==StockState.SOLD&&t.bookingId.equals(s.soldOrderId),"Trạng thái mã vé không hợp lệ");s.state=StockState.USED;s.usedAt=clock.instant();}}
@@ -82,5 +83,5 @@ public class InventoryService {
   return all.stream().map(b->{Map<String,Object> m=new LinkedHashMap<>();m.put("batch",b);m.put("productName",products.findById(b.productId).map(p->p.name).orElse(""));Map<String,Long> c=new LinkedHashMap<>();for(var state:StockState.values())c.put(state.name(),counts.getOrDefault(b.id,Map.of()).getOrDefault(state.name(),0L));m.put("counts",c);return m;}).toList();
  }
  @Transactional(readOnly=true) public Map<String,Object> codes(String batchId,StockState state,int page){require(page>=0,"Trang không hợp lệ");var batch=batches.findById(batchId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy lô vé"));var rows=state==null?stock.findByBatchIdOrderByCodeAsc(batchId,PageRequest.of(page,100)):stock.findByBatchIdAndStateOrderByCodeAsc(batchId,state,PageRequest.of(page,100));return Map.of("batch",batch,"items",rows.getContent(),"page",page,"totalPages",rows.getTotalPages(),"total",rows.getTotalElements());}
- public TicketBatch active(String id,boolean active,String actor){var b=batches.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));lockProducts(List.of(b.productId));require(!active||!"SMILE".equals(b.source)||(!Boolean.TRUE.equals(b.smileIsChild)&&!Boolean.TRUE.equals(b.smileIsWeekday)),"Chưa mở bán vé Smile trẻ em / giới hạn ngày thường trước khi cấu hình quy tắc sử dụng");b.active=active;Audit a=new Audit();a.happenedAt=clock.instant();a.actor=actor;a.action=active?"BATCH_ENABLED":"BATCH_DISABLED";a.target=b.code;audits.save(a);return b;}
+ public TicketBatch active(String id,boolean active,String actor){var b=batches.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));lockProducts(List.of(b.productId));require(!active||!smile.enabled()||"SMILE".equals(b.source)||"SYNCED".equals(b.smileSyncState),"Lô chưa đồng bộ thành công sang Smile");require(!active||!"SMILE".equals(b.source)||(!Boolean.TRUE.equals(b.smileIsChild)&&!Boolean.TRUE.equals(b.smileIsWeekday)),"Chưa mở bán vé Smile trẻ em / giới hạn ngày thường trước khi cấu hình quy tắc sử dụng");b.active=active;Audit a=new Audit();a.happenedAt=clock.instant();a.actor=actor;a.action=active?"BATCH_ENABLED":"BATCH_DISABLED";a.target=b.code;audits.save(a);return b;}
 }

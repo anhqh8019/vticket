@@ -1,3 +1,7 @@
+# Tích hợp Smile PSM / Onsen
+
+Đã có module ghi lô trực tiếp vào TicketOnsen khi tạo lô, kèm hàng đợi, kiểm tra schema, thử lại và đối chiếu mã trùng. Xem [hướng dẫn cấu hình và giới hạn](SMILE_ONSEN_SETUP.md). Các ghi chú trước khi có module được giữ dưới đây làm bối cảnh; hướng dẫn mới là SMILE_ONSEN_SETUP.md.
+
 # Lô vé và tích hợp Smile PSM
 
 ## Yêu cầu đã nhận

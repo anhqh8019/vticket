@@ -85,6 +85,7 @@ public final class Domain {
   @Column(length=64) public String ticketCode;
   @Column(length=40) public String batchCode;
   @Column(length=20) public String source;
+  @Column(length=128) public String smileGateBarcode;
   @Column(length=64) public String smileSeqNo;
   @Column(length=64) public String smileSerial;
   @Column(length=128) public String smileBarcode;
@@ -109,6 +110,9 @@ public final class Domain {
   @Column(nullable=false) public LocalDate validUntil;
   @Column(nullable=false) public boolean active=true;
   @Column(nullable=false,length=20) public String source="VTICKET";
+  @Column(length=20) public String smileSyncState;
+  @Column(length=20) public String smileCodeMapping;
+  public Instant smileSyncedAt;
   @Column(length=64) public String smileTicketTypeCode;
   @Column(length=150) public String smileTicketTypeName;
   public Boolean smileIsWeekday;
@@ -123,6 +127,7 @@ public final class Domain {
   @Column(nullable=false) public Long productId;
   @Column(nullable=false,unique=true,length=64) public String code;
   @Column(nullable=false,unique=true,length=36) public String qrToken;
+  @Column(length=128) public String smileGateBarcode;
   @Column(length=64) public String smileSeqNo;
   @Column(length=64) public String smileSerial;
   @Column(length=128) public String smileBarcode;
@@ -177,6 +182,18 @@ public final class Domain {
  public static class PaymentCallbackLock { @Id public Integer id; }
  @Entity(name="TicketIdentifierCounter") @Table(name="ticket_identifier_counter")
  public static class TicketIdentifierCounter { @Id public Integer id; @Column(nullable=false) public long nextValue; }
+ @Entity(name="SmileJob") @Table(name="smile_sync_jobs")
+ public static class SmileJob {
+  @Id @Column(length=36) public String batchId;
+  @Column(nullable=false,length=20) public String state;
+  @Column(nullable=false) public int attempts;
+  @Column(nullable=false) public Instant createdAt;
+  @Column(nullable=false) public Instant nextAttemptAt;
+  public Instant leaseUntil;
+  public Instant syncedAt;
+  @Column(length=36) public String attemptId;
+  @Column(length=500) public String lastError;
+ }
  @Entity(name="Audit") @Table(name="audit_events")
  public static class Audit {
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id;

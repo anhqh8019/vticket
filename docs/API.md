@@ -131,3 +131,7 @@ Hỗ trợ nhóm mua 300 hoặc 500 vé, không cần tạo loại tài khoản 
 GET `/api/public/orders/{accessToken}/tickets.zip`: chỉ trả ZIP khi đơn PAID và đã có vé, cùng quyền accessToken với PDF gộp. Pending/cancelled/expired bị từ chối, token sai trả 404. Header attachment, application/zip và Cache-Control: no-store. Mỗi ZIP entry là một PDF một trang cho đúng một vé, có Seri, barcode Code 128, QR và ngày sử dụng. Tên file theo thứ tự và Seri đã lọc ký tự; không chứa accessToken hay thông tin liên hệ khách. Tải lại không phát hành mã mới.
 
 ZIP được ghi tuần tự ra response, tạo/đóng từng PDF để không gom 500 PDF vào bộ nhớ. Timeout async 5 phút. Trang đơn chỉ xem trước 20 vé với đơn lớn, nút ZIP tải đủ toàn bộ; PDF gộp vẫn giữ. Vé bán lại dùng đúng ngày đã đặt và vẫn chỉ được soát một lần. Không tự động thay đổi chủ đơn hoặc tạo quy trình thanh toán đại lý cấp hai.
+
+## Tích hợp TicketOnsen
+
+Các endpoint /api/admin/smile và các trường ánh xạ mới xem [SMILE_ONSEN_SETUP.md](SMILE_ONSEN_SETUP.md). Đồng bộ ngay khi tạo lô theo lựa chọn nghiệp vụ; không chờ thanh toán. SeqNo do Smile cấp. smileGateBarcode là barcode thực dùng khi in vé đã đồng bộ, tách khỏi các định danh nội bộ để không tự đổi lịch sử.
