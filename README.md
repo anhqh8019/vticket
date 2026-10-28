@@ -146,3 +146,7 @@ Màn hình lô vé hỗ trợ **nhập Seri / barcode gốc từ Smile**, mã/t�
 ## Vé và combo
 
 Quản trị tách tab Vé / Combo / Dịch vụ. Combo tham chiếu một loại vé, cấu hình số vé cần mua và số vé tặng. Khách nhập số vé mua theo bội số nhóm; hệ thống chặn số chưa đủ, tính đơn giá mỗi vé mua và lấy cả vé tặng từ kho vé gốc. **Sau nâng cấp V6, cấu hình lại combo cũ trước khi mở bán**; không suy điều kiện từ tên/mô tả và không dùng lô combo cũ để thay kho vé gốc. Xem docs/API.md.
+
+## Combo đại lý 300 / 500 vé
+
+Đã hỗ trợ cấu hình và mua combo 300/500 vé. Sau thanh toán, khách tải ZIP gồm các PDF riêng (mỗi vé một file có Seri/barcode/QR) để phân phối lại. Giới hạn thực tế mỗi đơn 1.000 vé gồm vé tặng; mỗi vé giữ ngày dùng theo đơn gốc và chỉ sử dụng một lần. Trang chỉ xem trước 20 vé để tránh tải hàng trăm ảnh QR; ZIP luôn chứa toàn bộ vé.

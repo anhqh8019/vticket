@@ -202,7 +202,15 @@ function Shop({ counter, products, run, busy, placed }) {
   const quantityErrors = selected
     .map((p) => comboQuantityError(p, qty[p.id]))
     .filter(Boolean);
-  const change = (id, n) => Q({ ...qty, [id]: Math.max(0, Math.min(100, n)) });
+  if (
+    selected
+      .filter((p) => p.kind !== "SERVICE")
+      .reduce((sum, p) => sum + comboTicketCount(p, qty[p.id]), 0) > 1000
+  )
+    quantityErrors.push(
+      "Tổng số vé nhận, gồm vé tặng, tối đa 1.000 vé mỗi đơn.",
+    );
+  const change = (id, n) => Q({ ...qty, [id]: Math.max(0, Math.min(1000, n)) });
   const quantity = (p) => (
     <div className="qty">
       <button
@@ -222,7 +230,7 @@ function Shop({ counter, products, run, busy, placed }) {
       <input
         type="number"
         min="0"
-        max="100"
+        max="1000"
         step="1"
         aria-label={"Số vé " + p.name}
         value={qty[p.id] || 0}
@@ -576,7 +584,7 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
             <>
               <h2>Vé điện tử ({tickets.length})</h2>
               <div className="cards ticketcards">
-                {tickets.map((t) => (
+                {tickets.slice(0, 20).map((t) => (
                   <div className="panel ticket" key={t.id}>
                     <b className="brandtext">♨ Venusgiti</b>
                     <h3>{t.productName}</h3>
@@ -615,17 +623,33 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
                   </div>
                 ))}
               </div>
+              {tickets.length > 20 && (
+                <p className="muted">
+                  Xem trước 20 / {tickets.length} vé. ZIP chứa toàn bộ vé, mỗi
+                  file PDF có Seri, barcode và QR riêng để gửi cho khách mua
+                  lại. Ngày sử dụng giữ theo đơn đã đặt.
+                </p>
+              )}
               <div className="tabs no-print">
+                <a
+                  className="button"
+                  href={`/api/public/orders/${b.accessToken}/tickets.zip`}
+                  download
+                >
+                  Tải ZIP · {tickets.length} vé PDF riêng
+                </a>
                 <a
                   className="button"
                   href={`/api/public/orders/${b.accessToken}/tickets.pdf`}
                   download
                 >
-                  Tải PDF vé ({tickets.length} vé)
+                  Tải PDF gộp ({tickets.length} vé)
                 </a>
-                <button className="secondary" onClick={() => window.print()}>
-                  In vé
-                </button>
+                {tickets.length <= 20 && (
+                  <button className="secondary" onClick={() => window.print()}>
+                    In vé
+                  </button>
+                )}
               </div>
             </>
           )}
@@ -1995,7 +2019,7 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
               name="comboBuyQuantity"
               type="number"
               min="1"
-              max="100"
+              max="1000"
               step="1"
               defaultValue={product?.comboBuyQuantity || 10}
               required
@@ -2005,16 +2029,17 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
               name="comboGiftQuantity"
               type="number"
               min="0"
-              max="100"
+              max="1000"
               step="1"
               defaultValue={product?.comboGiftQuantity ?? 1}
               required
             />
           </div>
           <p className="muted">
-            Ví dụ mua 10 tặng 1, đơn giá 450.000đ: nhập 10 thì thu 4.500.000đ và
-            cấp 11 vé. Combo lấy cả vé mua và vé tặng từ kho của loại vé tham
-            chiếu, không tạo lô riêng.
+            Hỗ trợ combo đại lý 300/500 vé; tổng vé nhận tối đa 1.000 vé/đơn,
+            gồm vé tặng. Ví dụ mua 10 tặng 1, đơn giá 450.000đ: nhập 10 thì thu
+            4.500.000đ và cấp 11 vé. Combo lấy cả vé mua và vé tặng từ kho của
+            loại vé tham chiếu, không tạo lô riêng.
           </p>
         </>
       )}

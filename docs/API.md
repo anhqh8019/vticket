@@ -116,10 +116,18 @@ GET `/api/admin/ticket-batches/{id}/codes` giữ phân trang/bộ lọc cũ, b�
 
 ## Combo tham chiếu loại vé
 
-Product kind COMBO cần comboTicketId (ID một TICKET), comboBuyQuantity (1–100), comboGiftQuantity (0–100). price là **đơn giá mỗi vé mua**, không phải giá trọn combo. Vé, combo và dịch vụ được quản lý riêng; không đổi kind sau khi tạo.
+Product kind COMBO cần comboTicketId (ID một TICKET), comboBuyQuantity (1–1.000), comboGiftQuantity (0–1.000). price là **đơn giá mỗi vé mua**, không phải giá trọn combo. Vé, combo và dịch vụ được quản lý riêng; không đổi kind sau khi tạo.
 
-Ví dụ price=450000, comboBuyQuantity=10, comboGiftQuantity=1: dòng đặt quantity=10 tính 4.500.000đ và cấp 11 vé; quantity=20 cấp 22 vé. quantity phải là bội số của comboBuyQuantity, tối đa 100; kiểm tra ở cả frontend và backend trước khi tạo đơn/chuyển sang thanh toán. Vé tặng không tính tiền nhưng giữ/cấp mã thật từ kho comboTicketId. Tổng mã thực tế một đơn tối đa 500, gồm vé tặng.
+Ví dụ price=450000, comboBuyQuantity=10, comboGiftQuantity=1: dòng đặt quantity=10 tính 4.500.000đ và cấp 11 vé; quantity=20 cấp 22 vé. quantity phải là bội số của comboBuyQuantity, tối đa 1.000; kiểm tra ở cả frontend và backend trước khi tạo đơn/chuyển sang thanh toán. Vé tặng không tính tiền nhưng giữ/cấp mã thật từ kho comboTicketId. Tổng mã thực tế một đơn tối đa 1.000, gồm vé tặng.
 
 BookingLine lưu ticketProductId, ticketQuantity, ticketProductName tại thời điểm đặt. Thanh toán/giữ mã/phát hành theo snapshot này, không tính lại theo cấu hình combo hiện tại. Dịch vụ bao gồm là hợp của dịch vụ trên vé gốc và combo, không tự nhân thành dòng thu tiền thêm.
 
 Chỉ tạo/nhập lô cho TICKET, không tạo lô riêng cho COMBO. Flyway V6 tạm dừng combo cũ do không thể suy số vé mua/tặng từ tên hoặc mô tả: quản trị vào tab Combo, chọn vé gốc, nhập điều kiện và kiểm tra lại đơn giá trước khi mở bán. Đơn/vé đã tạo trước nâng cấp giữ cơ chế snapshot cũ, không tự thay đổi số lượng.
+
+## Combo đại lý và tải ZIP
+
+Hỗ trợ nhóm mua 300 hoặc 500 vé, không cần tạo loại tài khoản mới. Giữ mô hình đơn giá mỗi vé mua; mua đủ bội số của comboBuyQuantity. Mỗi dòng tối đa 1.000; một nhóm comboBuyQuantity + comboGiftQuantity và tổng vé phát hành mỗi đơn đều tối đa 1.000, gồm vé tặng. Kho vé gốc phải đủ toàn bộ số mã.
+
+GET `/api/public/orders/{accessToken}/tickets.zip`: chỉ trả ZIP khi đơn PAID và đã có vé, cùng quyền accessToken với PDF gộp. Pending/cancelled/expired bị từ chối, token sai trả 404. Header attachment, application/zip và Cache-Control: no-store. Mỗi ZIP entry là một PDF một trang cho đúng một vé, có Seri, barcode Code 128, QR và ngày sử dụng. Tên file theo thứ tự và Seri đã lọc ký tự; không chứa accessToken hay thông tin liên hệ khách. Tải lại không phát hành mã mới.
+
+ZIP được ghi tuần tự ra response, tạo/đóng từng PDF để không gom 500 PDF vào bộ nhớ. Timeout async 5 phút. Trang đơn chỉ xem trước 20 vé với đơn lớn, nút ZIP tải đủ toàn bộ; PDF gộp vẫn giữ. Vé bán lại dùng đúng ngày đã đặt và vẫn chỉ được soát một lần. Không tự động thay đổi chủ đơn hoặc tạo quy trình thanh toán đại lý cấp hai.

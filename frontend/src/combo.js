@@ -1,7 +1,7 @@
 export function comboQuantityError(product, quantity) {
   if (!quantity) return "";
-  if (!Number.isInteger(quantity) || quantity < 0 || quantity > 100)
-    return `${product.name}: số lượng phải là số nguyên từ 1 đến 100.`;
+  if (!Number.isInteger(quantity) || quantity < 0 || quantity > 1000)
+    return `${product.name}: số lượng phải là số nguyên từ 1 đến 1.000.`;
   if (product.kind !== "COMBO") return "";
   const step = product.comboBuyQuantity;
   if (!product.comboTicketId || !Number.isInteger(step) || step < 1)

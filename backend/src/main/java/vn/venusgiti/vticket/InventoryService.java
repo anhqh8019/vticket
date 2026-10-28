@@ -56,7 +56,7 @@ public class InventoryService {
   Audit audit=new Audit();audit.happenedAt=clock.instant();audit.actor=actor;audit.action="BATCH_IDENTIFIERS_GENERATED";audit.target=b.code;audits.save(audit);return b;
  }
  public void reserve(Booking b){
-  int total=b.lines.stream().filter(l->l.kind!=Kind.SERVICE).mapToInt(this::ticketCount).sum();require(total<=500,"Tối đa 500 vé trong một đơn");
+  int total=b.lines.stream().filter(l->l.kind!=Kind.SERVICE).mapToInt(this::ticketCount).sum();require(total<=1000,"Tối đa 1.000 vé trong một đơn, gồm vé tặng");
   for(BookingLine l:b.lines)if(l.kind!=Kind.SERVICE){
    for(StockCode old:stock.expired(ticketProduct(l),StockState.RESERVED,clock.instant()))reset(old);
    stock.flush();var available=stock.available(ticketProduct(l),StockState.AVAILABLE,b.visitDate,PageRequest.of(0,ticketCount(l)));

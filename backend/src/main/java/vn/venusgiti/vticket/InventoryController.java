@@ -20,4 +20,9 @@ public class InventoryController {
  @PutMapping("/admin/ticket-batches/{id}/active") public TicketBatch active(@PathVariable String id,@Valid @RequestBody BatchActiveInput in,Authentication a){return inventory.active(id,in.active(),a.getName());}
  @GetMapping(value="/public/orders/{token}/tickets.pdf",produces=MediaType.APPLICATION_PDF_VALUE)
  public ResponseEntity<byte[]> tickets(@PathVariable String token)throws IOException{return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"Venusgiti-tickets.pdf\"").cacheControl(CacheControl.noStore()).body(pdf.generate(token));}
+ @GetMapping(value="/public/orders/{token}/tickets.zip",produces="application/zip")
+ public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> zip(@PathVariable String token){
+  var paid=pdf.prepare(token); // Authorize PAID and snapshot all scalar data before starting the asynchronous response.
+  return ResponseEntity.ok().header(HttpHeaders.CONTENT_DISPOSITION,"attachment; filename=\"Venusgiti-tickets.zip\"").cacheControl(CacheControl.noStore()).body(output->pdf.writeZip(paid,output));
+ }
 }

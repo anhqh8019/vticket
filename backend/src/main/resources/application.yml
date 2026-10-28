@@ -1,4 +1,7 @@
 spring:
+  mvc:
+    async:
+      request-timeout: 300000
   application:
     name: vticket
   datasource:

@@ -19,10 +19,24 @@ import vn.venusgiti.vticket.Domain.*;
 public class TicketPdfService {
  private final BookingService bookings;
  TicketPdfService(BookingService b){bookings=b;}
- public byte[] generate(String accessToken) throws IOException {
-  Booking b=bookings.getPublic(accessToken);
-  BookingService.require(b.status==Status.PAID,"Chỉ tải PDF khi đơn đã thanh toán");
-  var tickets=bookings.ticketList(b.id);BookingService.require(!tickets.isEmpty(),"Đơn chưa có vé được cấp");
+ public record PaidTickets(Booking order,List<Ticket> tickets) {}
+ public PaidTickets prepare(String accessToken){
+  Booking b=bookings.getPublic(accessToken);BookingService.require(b.status==Status.PAID,"Chỉ tải vé khi đơn đã thanh toán");
+  var tickets=bookings.ticketList(b.id).stream().sorted(Comparator.comparing((Ticket t)->t.ticketCode==null?t.id:t.ticketCode).thenComparing(t->t.id)).toList();BookingService.require(!tickets.isEmpty(),"Đơn chưa có vé được cấp");return new PaidTickets(b,tickets);
+ }
+ public byte[] generate(String accessToken) throws IOException {var paid=prepare(accessToken);return render(paid.order(),paid.tickets());}
+ /** Generate one PDF at a time directly into the response; never hold the entire archive in memory. */
+ public void writeZip(PaidTickets paid,OutputStream output) throws IOException {
+  try(var zip=new java.util.zip.ZipOutputStream(output,java.nio.charset.StandardCharsets.UTF_8)){
+   int index=0;for(var ticket:paid.tickets()){
+    String serial=ticket.smileSerial==null?ticket.id:ticket.smileSerial;serial=serial.replaceAll("[^A-Za-z0-9_-]","_");serial=serial.substring(0,Math.min(serial.length(),64));
+    String name=String.format(Locale.ROOT,"%04d-Venusgiti-%s.pdf",++index,serial);
+    zip.putNextEntry(new java.util.zip.ZipEntry(name));zip.write(render(paid.order(),List.of(ticket)));zip.closeEntry();
+   }
+   zip.finish();
+  }
+ }
+ private byte[] render(Booking b,List<Ticket> tickets) throws IOException {
   try(var document=new PDDocument();var fontStream=new ClassPathResource("fonts/VenusgitiSans.ttf").getInputStream();var output=new ByteArrayOutputStream()){
    var font=PDType0Font.load(document,fontStream,true);
    for(Ticket t:tickets){
