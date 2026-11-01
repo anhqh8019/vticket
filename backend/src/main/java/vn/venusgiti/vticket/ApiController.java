@@ -17,15 +17,15 @@ import vn.venusgiti.vticket.Requests.*;
 
 @RestController @RequestMapping("/api")
 public class ApiController {
- private final Products products; private final Vouchers vouchers;private final Bookings bookings;private final Audits audits;private final BookingService service;private final Clock clock;private final VietQrProperties vietqr;private final VietQrPaymentService payments;
- ApiController(Products p,Vouchers v,Bookings b,Audits a,BookingService s,Clock c,VietQrProperties vq,VietQrPaymentService paymentService){products=p;vouchers=v;bookings=b;audits=a;service=s;clock=c;vietqr=vq;payments=paymentService;}
+ private final Products products; private final Vouchers vouchers;private final Bookings bookings;private final Audits audits;private final BookingService service;private final Clock clock;private final VietQrProperties vietqr;private final VietQrPaymentService payments;private final TicketEmailQueue ticketEmails;
+ ApiController(Products p,Vouchers v,Bookings b,Audits a,BookingService s,Clock c,VietQrProperties vq,VietQrPaymentService paymentService,TicketEmailQueue emailQueue){products=p;vouchers=v;bookings=b;audits=a;service=s;clock=c;vietqr=vq;payments=paymentService;ticketEmails=emailQueue;}
  @GetMapping("/csrf") public Map<String,String> csrf(CsrfToken token){return Map.of("token",token.getToken(),"headerName",token.getHeaderName());}
  @GetMapping("/me") public Map<String,Object> me(Authentication a){return Map.of("username",a.getName(),"roles",a.getAuthorities().stream().map(Object::toString).toList());}
  @GetMapping("/public/config") public Map<String,Object> config(){return Map.of("brand","Venusgiti","vietqrEnabled",vietqr.ready(),"vietqrEnvironment",vietqr.client().baseUrl().contains("dev.vietqr.org")?"sandbox":"production");}
  @GetMapping("/public/products") public List<Product> catalog(){return products.findByActiveTrueOrderByIdAsc();}
  @PostMapping("/public/orders") public Booking order(@Valid @RequestBody OrderInput in){return service.create(in,Channel.ONLINE,"guest");}
- @GetMapping("/public/orders/{token}") public OrderDetails detail(@PathVariable String token){var b=service.getPublic(token);return new OrderDetails(b,service.ticketList(b.id),payments.view(b.id));}
- public record OrderDetails(Booking order,List<Ticket> tickets,VietQrPaymentService.View payment) {}
+ @GetMapping("/public/orders/{token}") public OrderDetails detail(@PathVariable String token){var b=service.getPublic(token);return new OrderDetails(b,service.ticketList(b.id),payments.view(b.id),ticketEmails.view(b.id));}
+ public record OrderDetails(Booking order,List<Ticket> tickets,VietQrPaymentService.View payment,TicketEmailQueue.View emailDelivery) {}
  @PostMapping("/public/orders/{token}/cancel") public Booking cancel(@PathVariable String token){return service.cancel(service.getPublic(token).id,"guest",false);}
  @GetMapping(value="/public/qr/{qrToken}",produces=MediaType.IMAGE_PNG_VALUE) public byte[] qr(@PathVariable String qrToken) throws Exception {try{UUID.fromString(qrToken);}catch(IllegalArgumentException e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Mã QR không hợp lệ");}var matrix=new MultiFormatWriter().encode(qrToken,BarcodeFormat.QR_CODE,260,260);var out=new ByteArrayOutputStream();MatrixToImageWriter.writeToStream(matrix,"PNG",out);return out.toByteArray();}
  @GetMapping("/staff/orders") public List<Booking> orders(){return bookings.findTop200ByOrderByCreatedAtDesc();}

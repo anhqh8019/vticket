@@ -11,8 +11,8 @@ import vn.venusgiti.vticket.Requests.*;
 
 @Service @Transactional
 public class BookingService {
- private final Products products; private final Vouchers vouchers; private final Bookings bookings; private final Tickets tickets; private final Audits audits; private final Clock clock; private final InventoryService inventory;
- BookingService(Products p,Vouchers v,Bookings b,Tickets t,Audits a,Clock c,InventoryService i){products=p;vouchers=v;bookings=b;tickets=t;audits=a;clock=c;inventory=i;}
+ private final Products products; private final Vouchers vouchers; private final Bookings bookings; private final Tickets tickets; private final Audits audits; private final Clock clock; private final InventoryService inventory; private final TicketEmailQueue ticketEmails;
+ BookingService(Products p,Vouchers v,Bookings b,Tickets t,Audits a,Clock c,InventoryService i,TicketEmailQueue emailQueue){products=p;vouchers=v;bookings=b;tickets=t;audits=a;clock=c;inventory=i;ticketEmails=emailQueue;}
  static void require(boolean condition,String message){ if(!condition)throw new ResponseStatusException(HttpStatus.CONFLICT,message); }
  static String phone(String value){return value.replaceAll("[ -]","").replaceFirst("^\\+84","0");}
  private Instant now(){return clock.instant();}
@@ -23,7 +23,7 @@ public class BookingService {
   var lockIds=new ArrayList<Long>(input.lines().stream().map(LineInput::productId).toList());
   for(var item:input.lines()){var selected=products.findById(item.productId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy vé/dịch vụ"));if(selected.kind==Kind.COMBO&&selected.comboTicketId!=null)lockIds.add(selected.comboTicketId);}
   inventory.lockProducts(lockIds);
-  Booking b=new Booking();b.id=UUID.randomUUID().toString();b.accessToken=UUID.randomUUID().toString();b.customerName=input.customerName().trim();b.phone=phone(input.phone());b.email=input.email();b.visitDate=input.visitDate();b.channel=channel;b.status=Status.PENDING;b.createdAt=now();b.expiresAt=now().plus(Duration.ofMinutes(15));b.soldBy=actor;b.subtotal=BigDecimal.ZERO;
+  Booking b=new Booking();b.id=UUID.randomUUID().toString();b.accessToken=UUID.randomUUID().toString();b.customerName=input.customerName().trim();b.phone=phone(input.phone());b.email=input.email()==null?null:input.email().strip();b.visitDate=input.visitDate();b.channel=channel;b.status=Status.PENDING;b.createdAt=now();b.expiresAt=now().plus(Duration.ofMinutes(15));b.soldBy=actor;b.subtotal=BigDecimal.ZERO;
   Set<Long> seen=new HashSet<>();boolean hasTicket=false;
   for(LineInput item:input.lines()){
    require(seen.add(item.productId()),"Loại vé/dịch vụ bị trùng dòng");
@@ -57,7 +57,7 @@ public class BookingService {
  private Booking finish(Booking b,String method,String reference,String actor,Instant at){
   if(b.voucherCode!=null){var v=vouchers.lockCode(b.voucherCode).orElseThrow();v.usedOrderId=b.id;v.usedAt=at;v.reservedOrderId=null;v.reservedUntil=null;}
   b.status=Status.PAID;b.paidAt=at;b.paymentMethod=method;b.paymentReference=reference;
-  inventory.issue(b,at);audit(actor,method==null?"ZERO_TOTAL_CONFIRMED":"PAYMENT_"+method,b.id);return b;
+  inventory.issue(b,at);ticketEmails.paid(b);audit(actor,method==null?"ZERO_TOTAL_CONFIRMED":"PAYMENT_"+method,b.id);return b;
  }
  Booking pay(String id,String method,String reference,String actor){
   Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));

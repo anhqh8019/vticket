@@ -2,6 +2,19 @@ spring:
   mvc:
     async:
       request-timeout: 300000
+  mail:
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      "[mail.smtp.auth]": ${SMTP_AUTH:true}
+      "[mail.smtp.starttls.enable]": ${SMTP_STARTTLS:true}
+      "[mail.smtp.starttls.required]": ${SMTP_STARTTLS:true}
+      "[mail.smtp.ssl.enable]": ${SMTP_SSL:false}
+      "[mail.smtp.connectiontimeout]": 5000
+      "[mail.smtp.timeout]": 15000
+      "[mail.smtp.writetimeout]": 15000
   application:
     name: vticket
   datasource:
@@ -29,6 +42,13 @@ app:
   staff-user: ${STAFF_USER:staff}
   staff-password: ${STAFF_PASSWORD:}
   seed-data: false
+  ticket-email:
+    enabled: ${TICKET_EMAIL_ENABLED:false}
+    from: ${TICKET_EMAIL_FROM:}
+    public-base-url: ${PUBLIC_BASE_URL:}
+    worker-enabled: ${TICKET_EMAIL_WORKER_ENABLED:true}
+    max-attempts: ${TICKET_EMAIL_MAX_ATTEMPTS:5}
+    attachment-limit-bytes: ${TICKET_EMAIL_ATTACHMENT_LIMIT_BYTES:8000000}
   smile:
     enabled: ${SMILE_ENABLED:false}
     jdbc-url: ${SMILE_DB_URL:}

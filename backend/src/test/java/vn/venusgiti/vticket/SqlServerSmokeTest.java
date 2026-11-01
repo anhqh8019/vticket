@@ -62,4 +62,10 @@ class SqlServerSmokeTest {
   try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement();var rs=st.executeQuery("SELECT COUNT(*) FROM smile_ci.TicketOnsen WHERE HotelID IS NULL")){assertTrue(rs.next());assertEquals(2,rs.getInt(1));}
   try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement()){st.execute("UPDATE smile_ci.TicketOnsen SET IsCancel=1 WHERE BarCode='1000000001'");}assertThrows(IllegalStateException.class,()->client.sync(batch));
  }
+ @Autowired TicketEmailJobs emailJobs;
+ @Test void emailOutboxPersistsAndQueriesOnSqlServer(){
+  var j=new TicketEmailJob();j.bookingId="ci-legacy-order";j.recipient="qa@example.test";j.state="PENDING";j.createdAt=Instant.now();j.nextAttemptAt=j.createdAt.minusSeconds(1);emailJobs.saveAndFlush(j);
+  assertTrue(emailJobs.due(Instant.now(),org.springframework.data.domain.PageRequest.of(0,10)).stream().anyMatch(row->row.bookingId.equals(j.bookingId)));
+  assertEquals("qa@example.test",emailJobs.findById(j.bookingId).orElseThrow().recipient);emailJobs.deleteById(j.bookingId);
+ }
 }

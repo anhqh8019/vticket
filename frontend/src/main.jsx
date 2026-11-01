@@ -490,12 +490,12 @@ function Lookup({ open, busy }) {
   );
 }
 function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
-  const { order: b, tickets, payment } = d;
+  const { order: b, tickets, payment, emailDelivery } = d;
   const [pollError, setPollError] = useState(false);
   const expired = Date.parse(b.expiresAt) <= Date.now();
   useEffect(() => {
     setPollError(false);
-    if (b.status !== "PENDING") return;
+    if (b.status !== "PENDING" && !["PENDING", "SENDING", "RETRY"].includes(emailDelivery?.state)) return;
     let active = true,
       inFlight = false;
     const controller = new AbortController();
@@ -521,7 +521,7 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
       controller.abort();
       clearInterval(timer);
     };
-  }, [b.accessToken, b.status]);
+  }, [b.accessToken, b.status, emailDelivery?.state]);
   return (
     <>
       <div className="row">
@@ -630,6 +630,17 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
                   Xem trước 20 / {tickets.length} vé. ZIP chứa toàn bộ vé, mỗi
                   file PDF có Seri, barcode và QR riêng để gửi cho khách mua
                   lại. Ngày sử dụng giữ theo đơn đã đặt.
+                </p>
+              )}
+              {b.email && (
+                <p className="muted">
+                  {emailDelivery?.state === "SENT"
+                    ? `Vé đã được gửi qua máy chủ email đến ${b.email}. Kiểm tra cả thư rác nếu chưa thấy thư.`
+                    : ["PENDING", "SENDING", "RETRY"].includes(emailDelivery?.state)
+                      ? `Vé đang chờ gửi email đến ${b.email}. Bạn có thể tải vé ngay bên dưới.`
+                      : emailDelivery?.state === "FAILED"
+                        ? "Gửi email chưa thành công. Vé đã thanh toán vẫn có thể tải bên dưới; vui lòng liên hệ quầy nếu cần hỗ trợ."
+                        : "Bạn có thể tải vé tại đây và lưu mã tra cứu để mở lại đơn."}
                 </p>
               )}
               <div className="tabs no-print">

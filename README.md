@@ -154,3 +154,7 @@ Quản trị tách tab Vé / Combo / Dịch vụ. Combo tham chiếu một loạ
 ## Module Smile Onsen
 
 Đã bổ sung kết nối SQL Server riêng và hàng đợi ghi lô ngay khi tạo vào dbo.TicketOnsen. Mặc định tắt; cấu hình trong [docs/SMILE_ONSEN_SETUP.md](docs/SMILE_ONSEN_SETUP.md). Có tab quản trị Smile Onsen để kiểm tra kết nối/schema và xem lỗi. Lô chờ/lỗi chưa mở bán; barcode PDF lấy theo mapping đã đồng bộ. Chưa kết nối database Smile thật của khách hàng hoặc đồng bộ trạng thái soát/hủy/hoàn tiền.
+
+## Email vé sau thanh toán
+
+Có thể bật gửi email nền cho khách đã nhập email: PDF đơn thường, ZIP từ 300 vé, hoặc link tải khi file quá lớn. Cấu hình SMTP và WinSW xem [EMAIL_SETUP.md](docs/EMAIL_SETUP.md). Lỗi email không làm mất thanh toán hoặc phát hành vé trùng.

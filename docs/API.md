@@ -135,3 +135,7 @@ ZIP được ghi tuần tự ra response, tạo/đóng từng PDF để không g
 ## Tích hợp TicketOnsen
 
 Các endpoint /api/admin/smile và các trường ánh xạ mới xem [SMILE_ONSEN_SETUP.md](SMILE_ONSEN_SETUP.md). Đồng bộ ngay khi tạo lô theo lựa chọn nghiệp vụ; không chờ thanh toán. SeqNo do Smile cấp. smileGateBarcode là barcode thực dùng khi in vé đã đồng bộ, tách khỏi các định danh nội bộ để không tự đổi lịch sử.
+
+## Email vé
+
+GET chi tiết đơn bổ sung emailDelivery (null hoặc state/attempts/sentAt). ADMIN: GET `/api/admin/ticket-emails` và POST `/api/admin/ticket-emails/{bookingId}/retry` (CSRF, chỉ job gửi lỗi). Cấu hình và hành vi: [EMAIL_SETUP.md](EMAIL_SETUP.md).
