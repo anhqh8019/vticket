@@ -46,12 +46,13 @@ public class TicketEmailQueue {
         job.state="SENT";job.sentAt=clock.instant();job.leaseUntil=null;job.lastError=null;
         audit("system","TICKET_EMAIL_SENT",job.bookingId);
     }
-    public void failed(Claim claim) {
+    public void failed(Claim claim) { failed(claim,TicketEmailFailure.DELIVERY_FAILED_CHECK_SMTP); }
+    public void failed(Claim claim,TicketEmailFailure failure) {
         var job=jobs.lockId(claim.bookingId()).orElseThrow();
         if (!"SENDING".equals(job.state)||!Objects.equals(job.attemptId,claim.attemptId())) return;
         job.state=job.attempts>=props.maxAttempts()?"FAILED":"RETRY";
         job.nextAttemptAt=clock.instant().plusSeconds(Math.min(3600,60L*(1L<<Math.min(job.attempts-1,6))));
-        job.leaseUntil=null;job.lastError="DELIVERY_FAILED_CHECK_SMTP";
+        job.leaseUntil=null;job.lastError=failure.name();
         // Do not persist exception messages, which may include SMTP credentials or bearer links.
         audit("system","TICKET_EMAIL_FAILED",job.bookingId);
     }

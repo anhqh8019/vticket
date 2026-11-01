@@ -100,7 +100,7 @@ class TicketEmailIntegrationTest {
     @Test void smtpFailureRetriesWithoutChangingPaymentAndHasBoundedAttempts(){
         var b=order("retry@example.test");service.cash(b.id,"staff");smtp.fail=true;worker.process(b.id);
         assertEquals("RETRY",queue.view(b.id).state());assertEquals(Status.PAID,bookings.findById(b.id).orElseThrow().status);
-        assertEquals(2,service.ticketList(b.id).size());assertEquals("DELIVERY_FAILED_CHECK_SMTP",jobs.findById(b.id).orElseThrow().lastError);
+        assertEquals(2,service.ticketList(b.id).size());assertEquals("SMTP_SEND_FAILED",jobs.findById(b.id).orElseThrow().lastError);
         worker.process(b.id);assertEquals(1,queue.view(b.id).attempts());readyAgain(b.id);worker.process(b.id);assertEquals("FAILED",queue.view(b.id).state());
         queue.retry(b.id,"admin");smtp.fail=false;worker.process(b.id);assertEquals("SENT",queue.view(b.id).state());assertEquals(1,smtp.messages.size());
         assertThrows(org.springframework.web.server.ResponseStatusException.class,()->queue.retry(b.id,"admin"));

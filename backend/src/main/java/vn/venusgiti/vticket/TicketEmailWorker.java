@@ -22,7 +22,7 @@ public class TicketEmailWorker {
     }
     public void process(String id){
         var claim=queue.claim(id);if(claim==null)return;
-        try{sender.send(claim);}catch(Exception e){queue.failed(claim);return;}
+        try{sender.send(claim);}catch(Exception e){var failure=TicketEmailFailure.classify(e);log.warn("Gửi email vé thất bại: bookingId={}, code={}",id,failure.name());queue.failed(claim,failure);return;}
         // A DB failure after SMTP accepted must leave the lease recoverable, not mark the payment failed.
         queue.sent(claim);
     }

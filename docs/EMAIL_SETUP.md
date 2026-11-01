@@ -76,3 +76,28 @@ Nếu mật khẩu chứa ký tự đặc biệt XML như `&`, phải encode th�
 7. Restart backend khi còn job và kiểm tra tiếp tục gửi. Kiểm tra bằng email thật trên các hộp thư mục tiêu và thư rác. Bật SPF/DKIM/DMARC theo hướng dẫn của nhà cung cấp/tên miền gửi để cải thiện chuyển phát.
 
 Kiểm thử tự động dùng SMTP giả trong bộ nhớ để kiểm chứng MIME/PDF/ZIP, không gửi thư thật. Cần nghiệm thu SMTP thật sau khi đơn vị vận hành cấu hình tài khoản.
+
+## Chẩn đoán gửi lỗi
+
+Bản mới lưu `last_error` theo nhóm nguyên nhân và log duy nhất bookingId + mã lỗi, không log nguyên phản hồi SMTP, email/password hay token vé. Các dòng lỗi cũ giữ mã cũ cho tới lần thử tiếp theo.
+
+| Mã | Kiểm tra |
+|---|---|
+| SMTP_AUTH_FAILED | Tên đăng nhập và app password/quyền SMTP; với Gmail dùng mật khẩu ứng dụng, không dùng mật khẩu đăng nhập thường |
+| SMTP_DNS_FAILED | Máy chủ không phân giải được SMTP_HOST; kiểm tra chính tả và DNS server |
+| SMTP_CONNECT_FAILED | Kết nối TCP bị từ chối/không có đường đi; kiểm tra host/port, firewall và mạng ra ngoài |
+| SMTP_TIMEOUT | Kết nối/đọc/ghi SMTP hết thời gian; kiểm tra mạng và dịch vụ SMTP |
+| SMTP_TLS_FAILED | Chứng chỉ, STARTTLS/SSL, ngày giờ máy chủ hoặc proxy TLS; không tắt kiểm tra chứng chỉ để bỏ qua lỗi |
+| SMTP_ADDRESS_REJECTED | SMTP từ chối địa chỉ; kiểm tra người nhận và quyền gửi của TICKET_EMAIL_FROM |
+| SMTP_SEND_FAILED | Lỗi SMTP khác; kiểm tra tài khoản nhà cung cấp, FROM, giới hạn gửi và trạng thái dịch vụ |
+| TICKET_FILE_FAILED | Không tạo/đọc/ghi được file vé; kiểm tra thư mục tạm của tài khoản chạy service, dung lượng đĩa và dữ liệu PDF/ZIP |
+| EMAIL_MESSAGE_INVALID | Địa chỉ hoặc cấu trúc thư không hợp lệ |
+| DELIVERY_FAILED_CHECK_SMTP | Chưa phân loại được, hoặc job được xử lý bởi bản cũ |
+
+Trên Windows có thể kiểm tra kết nối TCP (không kiểm tra mật khẩu/TLS):
+
+```powershell
+Test-NetConnection smtp.gmail.com -Port 587
+```
+
+Với Gmail qua STARTTLS: SMTP_HOST=smtp.gmail.com, SMTP_PORT=587, SMTP_AUTH=true, SMTP_STARTTLS=true, SMTP_SSL=false. SMTP_USERNAME và TICKET_EMAIL_FROM cùng địa chỉ Gmail. Restart đúng service sau sửa XML. Job RETRY sẽ tự chạy khi đến hạn; job FAILED dùng API retry ADMIN có CSRF đã mô tả ở trên. Không tạo lại thanh toán để thử gửi lại cùng đơn.
