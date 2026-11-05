@@ -2,7 +2,8 @@ import { comboQuantityError, comboTicketCount } from "./combo.js";
 import { parseSmileCodes } from "./smile-import.js";
 import React, { useState, useEffect } from "react";
 import { createRoot } from "react-dom/client";
-import { api, setCredentials, money, today, labels } from "./api";
+import { api, login, money, today, labels } from "./api";
+import { rememberStaffPage, restoredStaffPage, forgetStaffPage } from "./auth-navigation.js";
 import "./style.css";
 function Field({ label, ...props }) {
   return (
@@ -19,7 +20,8 @@ function App() {
     [config, G] = useState({}),
     [error, E] = useState(""),
     [busy, B] = useState(false),
-    [detail, D] = useState(null);
+    [detail, D] = useState(null),
+    [restoring, setRestoring] = useState(true);
   const admin = user?.roles.includes("ROLE_ADMIN");
   async function run(f) {
     E("");
@@ -37,11 +39,42 @@ function App() {
     C(await api("/public/products"));
   }
   useEffect(() => {
-    run(async () => {
-      G(await api("/public/config"));
-      await loadCatalog();
+    let active = true;
+    Promise.allSettled([
+      api("/public/config"),
+      api("/public/products"),
+      api("/me", { silentUnauthorized: true }),
+    ]).then(([settings, catalog, session]) => {
+      if (!active) return;
+      if (settings.status === "fulfilled") G(settings.value);
+      if (catalog.status === "fulfilled") C(catalog.value);
+      if (session.status === "fulfilled") {
+        U(session.value);
+        P(restoredStaffPage(session.value));
+      } else if (session.reason.status !== 401) {
+        E("Không kiểm tra được phiên đăng nhập. Vui lòng tải lại trang.");
+      }
+      if (settings.status === "rejected" || catalog.status === "rejected") {
+        E("Không tải được cấu hình hoặc danh mục. Vui lòng tải lại trang.");
+      }
+      setRestoring(false);
     });
+    const expired = () => {
+      U(null);
+      D(null);
+      forgetStaffPage();
+      P("login");
+      E("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+    };
+    window.addEventListener("vticket-session-expired", expired);
+    return () => {
+      active = false;
+      window.removeEventListener("vticket-session-expired", expired);
+    };
   }, []);
+  useEffect(() => {
+    if (user) rememberStaffPage(page);
+  }, [page, user]);
   function go(p) {
     P(p);
     E("");
@@ -82,17 +115,20 @@ function App() {
               <button onClick={() => go("orders")}>Đơn hàng</button>
               {admin && <button onClick={() => go("manage")}>Quản trị</button>}
               <button
-                onClick={() => {
-                  setCredentials("", "");
+                disabled={busy}
+                onClick={() => run(async () => {
+                  await api("/auth/logout", { method: "POST" });
+                  forgetStaffPage();
                   U(null);
+                  D(null);
                   go("shop");
-                }}
+                })}
               >
                 Đăng xuất
               </button>
             </>
           ) : (
-            <button onClick={() => go("login")}>Nhân viên</button>
+            <button disabled={restoring} onClick={() => go("login")}>Nhân viên</button>
           )}
         </nav>
       </header>
@@ -103,7 +139,7 @@ function App() {
             <button onClick={() => E("")}>×</button>
           </div>
         )}
-        {busy && (
+        {(busy || restoring) && (
           <div className="progress" role="status">
             Đang xử lý…
           </div>
@@ -116,14 +152,8 @@ function App() {
                 e.preventDefault();
                 const f = new FormData(e.currentTarget);
                 run(async () => {
-                  setCredentials(f.get("username"), f.get("password"));
-                  try {
-                    U(await api("/me"));
-                    P("orders");
-                  } catch (e) {
-                    setCredentials("", "");
-                    throw e;
-                  }
+                  U(await login(f.get("username"), f.get("password")));
+                  P("orders");
                 });
               }}
             >

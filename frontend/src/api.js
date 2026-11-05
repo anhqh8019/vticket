@@ -1,13 +1,9 @@
-let credentials = "";
-export function setCredentials(username, password) {
-  credentials = username
-    ? btoa(unescape(encodeURIComponent(`${username}:${password}`)))
-    : "";
+export async function login(username, password) {
+  return api("/auth/login", { method: "POST", body: { username, password } });
 }
 export async function api(path, options = {}) {
   const headers = {
     "Content-Type": "application/json",
-    ...(credentials ? { Authorization: `Basic ${credentials}` } : {}),
   };
   if (options.method && options.method !== "GET") {
     const r = await fetch("/api/csrf", { credentials: "same-origin" });
@@ -15,15 +11,20 @@ export async function api(path, options = {}) {
     const csrf = await r.json();
     headers[csrf.headerName] = csrf.token;
   }
+  const { silentUnauthorized, ...requestOptions } = options;
   const r = await fetch("/api" + path, {
-    ...options,
+    ...requestOptions,
     credentials: "same-origin",
     headers: { ...headers, ...options.headers },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   const data = await r.json().catch(() => ({}));
-  if (!r.ok)
-    throw new Error(
+  if (!r.ok) {
+    if (r.status === 401 && path !== "/auth/login" && !options.silentUnauthorized &&
+        (path === "/me" || path.startsWith("/staff/") || path.startsWith("/admin/"))) {
+      globalThis.dispatchEvent?.(new Event("vticket-session-expired"));
+    }
+    const error = new Error(
       data.message ||
         (r.status === 401
           ? "Tài khoản hoặc mật khẩu không đúng"
@@ -31,6 +32,9 @@ export async function api(path, options = {}) {
             ? "Không có quyền thực hiện"
             : "Không xử lý được yêu cầu"),
     );
+    error.status = r.status;
+    throw error;
+  }
   return data;
 }
 export const money = (n) => Number(n || 0).toLocaleString("vi-VN") + " ₫";

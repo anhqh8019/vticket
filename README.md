@@ -158,3 +158,27 @@ Quản trị tách tab Vé / Combo / Dịch vụ. Combo tham chiếu một loạ
 ## Email vé sau thanh toán
 
 Có thể bật gửi email nền cho khách đã nhập email: PDF đơn thường, ZIP từ 300 vé, hoặc link tải khi file quá lớn. Cấu hình SMTP và WinSW xem [EMAIL_SETUP.md](docs/EMAIL_SETUP.md). Lỗi email không làm mất thanh toán hoặc phát hành vé trùng.
+
+### Phiên đăng nhập nhân viên
+
+Giao diện đăng nhập qua `POST /api/auth/login` và giữ phiên bằng cookie
+`JSESSIONID` HttpOnly. Khi tải lại trang, `/api/me` khôi phục tài khoản và quyền;
+trình duyệt chỉ nhớ tên màn hình vận hành trong sessionStorage, không lưu mật khẩu.
+`POST /api/auth/logout` hủy phiên. Đăng nhập/đăng xuất vẫn yêu cầu CSRF.
+HTTP Basic vẫn được hỗ trợ cho công cụ gọi API trực tiếp; callback VietQR giữ
+cơ chế JWT riêng, không dùng phiên nhân viên.
+
+Thời gian chờ mặc định là **30 phút không hoạt động**. Có thể đặt biến môi trường
+`SESSION_TIMEOUT=2h` trong tiến trình backend nếu cần phiên dài hơn. Phiên hiện
+lưu trong bộ nhớ backend: khởi động lại backend sẽ yêu cầu đăng nhập lại.
+
+Khi cập nhật tính năng này, triển khai **cả backend và frontend/dist**, khởi động
+lại backend rồi đăng nhập một lần. Với Nginx HTTPS, giữ
+`proxy_set_header X-Forwarded-Proto $scheme;` để backend nhận đúng HTTPS và đặt
+cookie Secure. Chỉ cho truy cập backend qua proxy tin cậy, không mở công khai
+cổng 8080 khi dùng forwarded headers. Frontend và API cần dùng cùng origin.
+
+Kiểm tra sau triển khai: đăng nhập admin/nhân viên → mở màn hình vận hành → F5 →
+vẫn đúng tài khoản/quyền; đăng xuất → F5 → không còn phiên; nhân viên không mở
+được API quản trị. Cookie hết hạn, phiên không hoạt động quá thời gian chờ hoặc
+backend khởi động lại thì cần đăng nhập lại.

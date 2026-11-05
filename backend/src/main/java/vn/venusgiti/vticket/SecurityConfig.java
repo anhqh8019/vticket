@@ -20,10 +20,16 @@ public class SecurityConfig {
   return new InMemoryUserDetailsManager(User.withUsername(admin).password("{bcrypt}"+encoder.encode(password)).roles("ADMIN").build(),User.withUsername(staff).password("{bcrypt}"+encoder.encode(staffPassword)).roles("STAFF").build());
  }
  @Bean @Order(1) SecurityFilterChain callbacks(HttpSecurity http) throws Exception {return http.securityMatcher("/vietqr/**","/api/vietqr/**","/api-vietqr-callback/**").csrf(c->c.disable()).authorizeHttpRequests(a->a.anyRequest().permitAll()).sessionManagement(s->s.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.STATELESS)).build();}
- @Bean @Order(2) SecurityFilterChain security(HttpSecurity http) throws Exception {
-  return http.csrf(c->c.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse()).csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
-   .authorizeHttpRequests(a->a.requestMatchers("/api/admin/**").hasRole("ADMIN").requestMatchers("/api/staff/**").hasAnyRole("ADMIN","STAFF").requestMatchers("/api/me").authenticated().requestMatchers("/api/public/**","/api/csrf","/actuator/health","/error").permitAll().anyRequest().denyAll())
+ @Bean org.springframework.security.authentication.AuthenticationManager authenticationManager(org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration configuration) throws Exception {return configuration.getAuthenticationManager();}
+ @Bean org.springframework.security.web.context.SecurityContextRepository staffContexts(){return new org.springframework.security.web.context.HttpSessionSecurityContextRepository();}
+ @Bean org.springframework.security.web.csrf.CsrfTokenRepository staffCsrf(){return CookieCsrfTokenRepository.withHttpOnlyFalse();}
+ @Bean @Order(2) SecurityFilterChain security(HttpSecurity http,org.springframework.security.web.context.SecurityContextRepository staffContexts,org.springframework.security.web.csrf.CsrfTokenRepository staffCsrf) throws Exception {
+  return http.csrf(c->c.csrfTokenRepository(staffCsrf).csrfTokenRequestHandler(new CsrfTokenRequestAttributeHandler()))
+   .authorizeHttpRequests(a->a.requestMatchers("/api/admin/**").hasRole("ADMIN").requestMatchers("/api/staff/**").hasAnyRole("ADMIN","STAFF").requestMatchers("/api/me").authenticated().requestMatchers("/api/auth/login","/api/public/**","/api/csrf","/actuator/health","/error").permitAll().anyRequest().denyAll())
    .httpBasic(b->b.authenticationEntryPoint((req,res,e)->{res.setStatus(401);res.setContentType("application/json");res.getWriter().write("{\"message\":\"Vui lòng đăng nhập\"}");}))
-   .sessionManagement(s->s.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.STATELESS)).build();
+   .securityContext(c->c.securityContextRepository(staffContexts))
+   .requestCache(c->c.disable())
+   .logout(l->l.logoutUrl("/api/auth/logout").invalidateHttpSession(true).clearAuthentication(true).deleteCookies("JSESSIONID").logoutSuccessHandler((req,res,a)->{res.setHeader("Cache-Control","no-store");res.setStatus(204);}))
+   .sessionManagement(s->s.sessionCreationPolicy(org.springframework.security.config.http.SessionCreationPolicy.IF_REQUIRED)).build();
  }
 }
