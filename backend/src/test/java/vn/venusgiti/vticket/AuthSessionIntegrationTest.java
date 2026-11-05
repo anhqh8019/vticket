@@ -17,8 +17,16 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 class AuthSessionIntegrationTest {
  @Autowired MockMvc mvc;
  String credentials(String user,String password){return "{\"username\":\""+user+"\",\"password\":\""+password+"\"}";}
+ org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder csrfPost(String path,MockHttpSession session)throws Exception{
+  var request=get("/api/csrf");if(session!=null)request.session(session);
+  var result=mvc.perform(request).andExpect(status().isOk()).andReturn();
+  var token=tools.jackson.databind.json.JsonMapper.builder().build().readTree(result.getResponse().getContentAsString());
+  var post=post(path).cookie(result.getResponse().getCookies()).header(token.get("headerName").asText(),token.get("token").asText());
+  if(session!=null)post.session(session);
+  return post;
+ }
  MockHttpSession login(String user)throws Exception{
-  return (MockHttpSession)mvc.perform(post("/api/auth/login").with(csrf()).contentType("application/json").content(credentials(user,"demo-"+user+"-change-me"))).andExpect(status().isOk()).andExpect(jsonPath("$.username").value(user)).andReturn().getRequest().getSession(false);
+  return (MockHttpSession)mvc.perform(csrfPost("/api/auth/login",null).contentType("application/json").content(credentials(user,"demo-"+user+"-change-me"))).andExpect(status().isOk()).andExpect(jsonPath("$.username").value(user)).andReturn().getRequest().getSession(false);
  }
  @Test void refreshRestoresAdminWithoutResendingPassword()throws Exception{
   var session=login("admin");assertNotNull(session);
@@ -33,15 +41,15 @@ class AuthSessionIntegrationTest {
  }
  @Test void successfulLoginRotatesExistingSession()throws Exception{
   var session=new MockHttpSession();String old=session.getId();
-  mvc.perform(post("/api/auth/login").session(session).with(csrf()).contentType("application/json").content(credentials("admin","demo-admin-change-me"))).andExpect(status().isOk());
+  mvc.perform(csrfPost("/api/auth/login",session).contentType("application/json").content(credentials("admin","demo-admin-change-me"))).andExpect(status().isOk());
   assertNotEquals(old,session.getId());
  }
  @Test void wrongPasswordIsRejectedEvenWithExistingAuthenticatedSession()throws Exception{
   var session=login("admin");
-  mvc.perform(post("/api/auth/login").session(session).with(csrf()).contentType("application/json").content(credentials("admin","incorrect-password"))).andExpect(status().isUnauthorized());
+  mvc.perform(csrfPost("/api/auth/login",session).contentType("application/json").content(credentials("admin","incorrect-password"))).andExpect(status().isUnauthorized());
  }
  @Test void wrongPasswordDoesNotCreateAuthenticatedSession()throws Exception{
-  var result=mvc.perform(post("/api/auth/login").with(csrf()).contentType("application/json").content(credentials("admin","incorrect-password"))).andExpect(status().isUnauthorized()).andReturn();
+  var result=mvc.perform(csrfPost("/api/auth/login",null).contentType("application/json").content(credentials("admin","incorrect-password"))).andExpect(status().isUnauthorized()).andReturn();
   var session=(MockHttpSession)result.getRequest().getSession(false);
   var request=get("/api/me");if(session!=null)request.session(session);
   mvc.perform(request).andExpect(status().isUnauthorized());
@@ -54,7 +62,7 @@ class AuthSessionIntegrationTest {
  }
  @Test void logoutInvalidatesSessionAndAnonymousRefreshStaysLoggedOut()throws Exception{
   var session=login("admin");
-  mvc.perform(post("/api/auth/logout").session(session).with(csrf())).andExpect(status().isNoContent()).andExpect(cookie().maxAge("JSESSIONID",0));
+  mvc.perform(csrfPost("/api/auth/logout",session)).andExpect(status().isNoContent()).andExpect(cookie().maxAge("JSESSIONID",0));
   assertTrue(session.isInvalid());
   mvc.perform(get("/api/me")).andExpect(status().isUnauthorized());
  }
