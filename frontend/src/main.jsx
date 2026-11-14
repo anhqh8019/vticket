@@ -1051,6 +1051,53 @@ function Orders({ run, busy, open }) {
     </>
   );
 }
+function UserManagement({ run, busy }) {
+  const [users, setUsers] = useState([]);
+  const [editing, setEditing] = useState(null);
+  const [resetting, setResetting] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const load = async () => setUsers(await api("/admin/users"));
+  useEffect(() => { run(load); }, []);
+  const roleLabel = (role) => role === "ADMIN" ? "Quản trị viên" : "Nhân viên";
+  return <section className="panel">
+    <div className="row"><h2>Quản lý người dùng</h2><button disabled={busy} onClick={() => {setCreating(true);setEditing(null);setResetting(null);}}>+ Tạo tài khoản</button></div>
+    <p className="muted">Nhân viên được bán vé tại quầy, kiểm soát vé và xem đơn hàng. Quản trị viên có thêm quyền quản lý hệ thống và tài khoản.</p>
+    {(creating || editing) && <form key={editing?.id || "create"} onSubmit={e => {
+      e.preventDefault();const form=e.currentTarget;const f=new FormData(form);
+      run(async () => {
+        const body={displayName:f.get("displayName"),role:f.get("role")};
+        if(editing) body.enabled=f.get("enabled")==="on";
+        else {body.username=f.get("username");body.password=f.get("password");}
+        await api(editing ? `/admin/users/${editing.id}` : "/admin/users",{method:editing?"PUT":"POST",body});
+        form.reset();setCreating(false);setEditing(null);await load();
+      });
+    }}>
+      <h3>{editing ? `Cập nhật ${editing.username}` : "Tạo tài khoản mới"}</h3>
+      <div className="two-col">
+        {!editing && <Field label="Tên đăng nhập" name="username" required minLength={3} maxLength={100} pattern="[A-Za-z0-9][A-Za-z0-9._@\-]{2,99}" autoComplete="off" />}
+        <Field label="Họ và tên" name="displayName" required maxLength={150} defaultValue={editing?.displayName || ""} />
+        {!editing && <Field label="Mật khẩu (ít nhất 12 ký tự, tối đa 72 byte UTF-8)" name="password" type="password" required minLength={12} maxLength={72} autoComplete="new-password" />}
+        <label>Quyền<select name="role" defaultValue={editing?.role || "STAFF"}><option value="STAFF">Nhân viên</option><option value="ADMIN">Quản trị viên</option></select></label>
+      </div>
+      {editing && <label><input type="checkbox" name="enabled" defaultChecked={editing.enabled} /> Cho phép đăng nhập</label>}
+      <p className="muted">Khóa tài khoản hoặc đổi quyền sẽ kết thúc các phiên đăng nhập hiện có. Không thể tự khóa hoặc hạ quyền tài khoản đang dùng.</p>
+      <button disabled={busy}>Lưu tài khoản</button>{" "}<button type="button" className="secondary" disabled={busy} onClick={() => {setCreating(false);setEditing(null);}}>Hủy</button>
+    </form>}
+    {resetting && <form key={`password-${resetting.id}`} onSubmit={e => {
+      e.preventDefault();const form=e.currentTarget;const password=new FormData(form).get("password");
+      run(async () => {await api(`/admin/users/${resetting.id}/password`,{method:"POST",body:{password}});form.reset();setResetting(null);await load();});
+    }}>
+      <h3>Đặt lại mật khẩu: {resetting.username}</h3>
+      <Field label="Mật khẩu mới (ít nhất 12 ký tự, tối đa 72 byte UTF-8)" type="password" name="password" required minLength={12} maxLength={72} autoComplete="new-password" />
+      <p className="muted">Các phiên hiện tại của tài khoản này sẽ hết hiệu lực và cần đăng nhập lại.</p>
+      <button disabled={busy}>Đặt lại mật khẩu</button>{" "}<button type="button" className="secondary" disabled={busy} onClick={() => setResetting(null)}>Hủy</button>
+    </form>}
+    <div className="table-wrap"><table><thead><tr><th>Tên đăng nhập</th><th>Họ và tên</th><th>Quyền</th><th>Trạng thái</th><th>Thao tác</th></tr></thead><tbody>
+      {users.map(u => <tr key={u.id}><td>{u.username}</td><td>{u.displayName}</td><td>{roleLabel(u.role)}</td><td>{u.enabled ? "Hoạt động" : "Đã khóa"}</td><td><button className="secondary" disabled={busy} onClick={() => {setEditing(u);setCreating(false);setResetting(null);}}>Sửa / Khóa, mở</button>{" "}<button className="secondary" disabled={busy} onClick={() => {setResetting(u);setEditing(null);setCreating(false);}}>Đặt lại mật khẩu</button></td></tr>)}
+    </tbody></table></div>
+  </section>;
+}
+
 function Manage({ run, busy, refreshCatalog }) {
   const [tab, T] = useState("tickets"),
     [products, P] = useState([]),
@@ -1080,6 +1127,7 @@ function Manage({ run, busy, refreshCatalog }) {
           ["vouchers", "Voucher khách hàng"],
           ["receipts", "Đối soát VietQR"],
           ["smile", "Smile Onsen"],
+          ["users", "Người dùng"],
           ["audit", "Nhật ký"],
         ].map(([k, l]) => (
           <button
@@ -1215,6 +1263,7 @@ function Manage({ run, busy, refreshCatalog }) {
           </div>
         </>
       )}
+      {tab === "users" && <UserManagement run={run} busy={busy} />}
       {tab === "batches" && (
         <BatchManager products={products} run={run} busy={busy} />
       )}

@@ -1,0 +1,10 @@
+CREATE TABLE user_accounts (
+ id BIGINT IDENTITY PRIMARY KEY,
+ username VARCHAR(100) NOT NULL UNIQUE,
+ display_name NVARCHAR(150) NOT NULL,
+ password_hash VARCHAR(100) NOT NULL,
+ role VARCHAR(16) NOT NULL CHECK (role IN ('ADMIN','STAFF')),
+ enabled BIT NOT NULL,
+ security_version BIGINT NOT NULL,
+ created_at DATETIMEOFFSET NOT NULL
+);

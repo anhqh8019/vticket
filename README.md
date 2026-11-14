@@ -182,3 +182,20 @@ Kiểm tra sau triển khai: đăng nhập admin/nhân viên → mở màn hình
 vẫn đúng tài khoản/quyền; đăng xuất → F5 → không còn phiên; nhân viên không mở
 được API quản trị. Cookie hết hạn, phiên không hoạt động quá thời gian chờ hoặc
 backend khởi động lại thì cần đăng nhập lại.
+
+### Quản lý người dùng (V9)
+
+Đăng nhập quản trị → **Quản trị → Người dùng** để tạo tài khoản, cập nhật họ tên,
+phân quyền ADMIN/STAFF, khóa/mở hoặc đặt lại mật khẩu. Nhân viên không truy cập
+được chức năng này. Tên đăng nhập 3–100 ký tự không dấu, không phân biệt hoa/thường;
+mật khẩu từ 12 ký tự và tối đa 72 byte UTF-8, lưu dưới dạng BCrypt.
+
+Nâng cấp cả backend và frontend. Flyway V9 tự tạo `user_accounts` trên SQL Server
+(và H2 demo). Khi bảng chưa có tài khoản, ứng dụng khởi tạo admin/nhân viên từ
+`ADMIN_USER`, `ADMIN_PASSWORD`, `STAFF_USER`, `STAFF_PASSWORD` hiện có. Những lần
+khởi động sau giữ nguyên tài khoản/mật khẩu trong CSDL: sửa biến môi trường
+không đặt lại mật khẩu; hãy dùng màn hình Người dùng. Không xóa bảng tài khoản.
+
+Khóa, đổi quyền hoặc đặt lại mật khẩu làm phiên cũ hết hiệu lực ở yêu cầu tiếp
+theo. Không thể tự khóa/hạ quyền tài khoản đang dùng và phải giữ ít nhất một
+quản trị viên hoạt động. Thao tác quản lý được ghi nhật ký, không ghi mật khẩu.
