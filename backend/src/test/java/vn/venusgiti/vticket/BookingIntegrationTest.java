@@ -29,6 +29,30 @@ class BookingIntegrationTest {
  Voucher voucher(){Voucher v=new Voucher();v.code="VG-"+UUID.randomUUID().toString().toUpperCase(Locale.ROOT);v.customerName="Khách quen";v.phone="0900000000";v.percentage=15;v.validFrom=Instant.now().minusSeconds(60);v.validUntil=Instant.now().plusSeconds(3600);return vouchers.saveAndFlush(v);}
  OrderInput input(String code){return new OrderInput("Khách quen","0900000000","demo@example.com",LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")),code,List.of(new LineInput(ticket.id,2),new LineInput(extra.id,1)));}
  Booking create(String code){return service.create(input(code),Channel.ONLINE,"guest");}
+ @Test void onlineAndCounterOrdersAllowMissingPhone()throws Exception{
+  var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+  for(String path:List.of("/api/public/orders","/api/staff/orders")){
+   for(String phoneJson:List.of("",",\"phone\":null",",\"phone\":\"\"")){
+    var request=post(path).with(csrf()).contentType("application/json").content("{\"customerName\":\"Khách thử\""+phoneJson+",\"visitDate\":\""+LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"))+"\",\"lines\":[{\"productId\":"+ticket.id+",\"quantity\":1}]}");
+    if(path.startsWith("/api/staff/"))request.with(httpBasic("staff","demo-staff-change-me"));
+    var result=mvc.perform(request).andExpect(status().isOk()).andExpect(jsonPath("$.phone").value("")).andReturn();
+    var id=mapper.readTree(result.getResponse().getContentAsString()).get("id").asText();
+    assertEquals("",bookings.findById(id).orElseThrow().phone);
+   }
+  }
+ }
+ @Test void optionalPhoneStillRejectsMalformedNumber()throws Exception{
+  var json="{\"customerName\":\"Khách thử\",\"phone\":\"abc\",\"visitDate\":\""+LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"))+"\",\"lines\":[{\"productId\":"+ticket.id+",\"quantity\":1}]}";
+  mvc.perform(post("/api/public/orders").with(csrf()).contentType("application/json").content(json)).andExpect(status().isBadRequest());
+ }
+ @Test void voucherStillRequiresMatchingPhone(){
+  var v=voucher();var base=input(v.code);
+  for(String phone:Arrays.asList(null,"","0911111111")){
+   var in=new OrderInput(base.customerName(),phone,base.email(),base.visitDate(),v.code,base.lines());
+   assertThrows(ResponseStatusException.class,()->service.create(in,Channel.ONLINE,"guest"));
+  }
+  assertEquals(15,create(v.code).discountPercent);
+ }
  @Test void discountCoversTicketsAndExtras(){var v=voucher();var b=create(v.code);assertEquals(0,new BigDecimal("700000").compareTo(b.subtotal));assertEquals(0,new BigDecimal("105000").compareTo(b.discount));assertEquals(0,new BigDecimal("595000").compareTo(b.total));}
  @Test void cancelReleasesVoucherAcrossChannels(){var v=voucher();var a=create(v.code);assertThrows(ResponseStatusException.class,()->create(v.code));service.cancel(a.id,"guest",false);var b=service.create(input(v.code),Channel.COUNTER,"staff");service.cash(b.id,"staff");assertThrows(ResponseStatusException.class,()->create(v.code));assertEquals(b.id,vouchers.findById(v.id).orElseThrow().usedOrderId);}
  @Test void repeatedPaymentDoesNotIssueDuplicateTickets(){var b=create(null);service.pay(b.id,"VIETQR","ref","demo");service.pay(b.id,"VIETQR","ref","demo");assertEquals(2,tickets.findByBookingId(b.id).size());}

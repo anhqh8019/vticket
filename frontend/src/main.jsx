@@ -427,7 +427,7 @@ function Shop({ counter, products, run, busy, placed }) {
             <div className="two-col">
               {[
                 ["customerName", "Họ và tên", "text"],
-                ["phone", "Số điện thoại", "tel"],
+                ["phone", "Số điện thoại (không bắt buộc)", "tel"],
                 ["email", "Email (không bắt buộc)", "email"],
               ].map(([k, l, t]) => (
                 <Field
@@ -435,8 +435,8 @@ function Shop({ counter, products, run, busy, placed }) {
                   label={l}
                   type={t}
                   value={customer[k]}
-                  required={k !== "email"}
-                  maxLength={k === "email" ? 254 : 150}
+                  required={k === "customerName" || (k === "phone" && !!customer.voucherCode.trim())}
+                  maxLength={k === "email" ? 254 : k === "phone" ? 20 : 150}
                   onChange={(e) => S({ ...customer, [k]: e.target.value })}
                 />
               ))}

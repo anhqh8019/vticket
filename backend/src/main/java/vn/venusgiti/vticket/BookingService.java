@@ -14,7 +14,7 @@ public class BookingService {
  private final Products products; private final Vouchers vouchers; private final Bookings bookings; private final Tickets tickets; private final Audits audits; private final Clock clock; private final InventoryService inventory; private final TicketEmailQueue ticketEmails;
  BookingService(Products p,Vouchers v,Bookings b,Tickets t,Audits a,Clock c,InventoryService i,TicketEmailQueue emailQueue){products=p;vouchers=v;bookings=b;tickets=t;audits=a;clock=c;inventory=i;ticketEmails=emailQueue;}
  static void require(boolean condition,String message){ if(!condition)throw new ResponseStatusException(HttpStatus.CONFLICT,message); }
- static String phone(String value){return value.replaceAll("[ -]","").replaceFirst("^\\+84","0");}
+ static String phone(String value){return value==null?"":value.strip().replaceAll("[ -]","").replaceFirst("^\\+84","0");}
  private Instant now(){return clock.instant();}
  void audit(String actor,String action,String target){Audit a=new Audit();a.happenedAt=now();a.actor=actor;a.action=action;a.target=target;audits.save(a);}
  @jakarta.persistence.PersistenceContext private jakarta.persistence.EntityManager entityManager;
@@ -36,6 +36,7 @@ public class BookingService {
   require(hasTicket,"Đơn cần có ít nhất một vé hoặc combo");
   inventory.reserve(b);
   if(input.voucherCode()!=null&&!input.voucherCode().isBlank()){
+   require(!b.phone.isBlank(),"Vui lòng nhập số điện thoại được cấp voucher");
    Voucher v=vouchers.lockCode(input.voucherCode().trim().toUpperCase(Locale.ROOT)).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Voucher không hợp lệ"));
    require(!v.revoked&&v.usedOrderId==null&&!now().isBefore(v.validFrom)&&now().isBefore(v.validUntil)&&v.phone.equals(b.phone),"Voucher không hợp lệ, không đúng khách hoặc đã hết hạn/sử dụng");
    require(v.reservedOrderId==null||v.reservedUntil==null||!v.reservedUntil.isAfter(now()),"Voucher đang được giữ cho đơn khác");
