@@ -12,10 +12,21 @@ test('holiday takes precedence over weekend and is year-specific',()=>{
  assert.equal(dayType('2027-01-02',days),'HOLIDAY');assert.equal(priceForDate(combo,'2027-01-02',days),200);
  assert.equal(dayType('2028-01-02',days),'WEEKEND');
 });
-test('unset special price falls back to base, zero is preserved, tickets/services unaffected',()=>{
+test('unset special price falls back to base, zero is preserved, services unaffected',()=>{
  assert.equal(priceForDate({...combo,holidayPrice:null},'2027-01-02',[{date:'2027-01-02'}]),100);
  assert.equal(priceForDate({...combo,weekendPrice:null},'2027-01-09'),100);
  assert.equal(priceForDate({...combo,holidayPrice:0},'2027-01-02',[{date:'2027-01-02'}]),0);
- assert.equal(priceForDate({...combo,kind:'TICKET'},'2027-01-09'),100);
+ assert.equal(priceForDate({...combo,kind:'TICKET'},'2027-01-09'),150);
  assert.equal(priceForDate({...combo,kind:'SERVICE'},'2027-01-09'),100);
+});
+
+test('ticket prices follow calendar and remain independent from combo prices',()=>{
+ const ticket={kind:'TICKET',price:250,weekendPrice:300,holidayPrice:400};
+ assert.equal(priceForDate(ticket,'2027-01-04'),250);
+ assert.equal(priceForDate(ticket,'2027-01-09'),300);
+ assert.equal(priceForDate(ticket,'2027-01-10'),300);
+ assert.equal(priceForDate(ticket,'2027-01-02',[{date:'2027-01-02'}]),400);
+ assert.equal(priceForDate({...ticket,weekendPrice:null},'2027-01-09'),250);
+ assert.equal(priceForDate({...ticket,holidayPrice:null},'2027-01-02',[{date:'2027-01-02'}]),250);
+ assert.equal(priceForDate({...ticket,holidayPrice:0},'2027-01-02',[{date:'2027-01-02'}]),0);
 });

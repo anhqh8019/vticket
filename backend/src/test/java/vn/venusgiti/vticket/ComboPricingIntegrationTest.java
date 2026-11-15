@@ -41,9 +41,29 @@ class ComboPricingIntegrationTest {
   var invalid=new ProductInput("BAD-PRICE","Combo giá","",Kind.COMBO,BigDecimal.valueOf(100),true,Set.of(),combo.comboTicketId,10,1,BigDecimal.valueOf(-1),BigDecimal.valueOf(200));
   mvc.perform(post("/api/admin/products").with(csrf()).with(httpBasic("admin","demo-admin-change-me")).contentType("application/json").content(mapper.writeValueAsString(invalid))).andExpect(status().isBadRequest());
  }
- @Test void nullPricesFallBackAndNonComboUsesBase(){
+ @Test void ticketPricesPersistViaAdminAndApplyForBothChannels()throws Exception{
+  var base=products.findById(combo.comboTicketId).orElseThrow();
+  var update=new ProductInput(base.code.toUpperCase(Locale.ROOT),base.name,"",Kind.TICKET,BigDecimal.valueOf(250),true,Set.of(),null,null,null,BigDecimal.valueOf(300),BigDecimal.valueOf(400));
+  var json=tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(update);
+  mvc.perform(put("/api/admin/products/"+base.id).with(csrf()).with(httpBasic("admin","demo-admin-change-me")).contentType("application/json").content(json)).andExpect(status().isOk()).andExpect(jsonPath("$.weekendPrice").value(300)).andExpect(jsonPath("$.holidayPrice").value(400));
+  for(var channel:Channel.values())for(var item:Map.of("2027-01-04",250,"2027-01-09",300,"2027-01-10",300,"2027-01-02",400).entrySet()){
+   var order=bookings.create(new OrderInput("Test",null,"",LocalDate.parse(item.getKey()),null,List.of(new LineInput(base.id,2))),channel,"test");
+   assertEquals(0,order.total.compareTo(BigDecimal.valueOf(item.getValue()*2)));assertEquals(0,order.lines.getFirst().unitPrice.compareTo(BigDecimal.valueOf(item.getValue())));
+   if(item.getKey().equals("2027-01-02")){
+    // Base ticket rates must not override the independent combo rates.
+    assertEquals(0,order(LocalDate.parse(item.getKey()),channel).total.compareTo(BigDecimal.valueOf(2000)));
+   }
+  }
+ }
+ @Test void ticketOrderKeepsPriceAfterLaterPriceChange(){
+  var base=products.findById(combo.comboTicketId).orElseThrow();base.weekendPrice=BigDecimal.valueOf(300);products.saveAndFlush(base);
+  var b=bookings.create(new OrderInput("Test",null,"",LocalDate.of(2027,1,9),null,List.of(new LineInput(base.id,1))),Channel.ONLINE,"test");
+  base.weekendPrice=BigDecimal.valueOf(999);products.saveAndFlush(base);
+  assertEquals(0,orders.findById(b.id).orElseThrow().total.compareTo(BigDecimal.valueOf(300)));
+ }
+ @Test void nullPricesFallBackAndServicesUseBase(){
   combo.weekendPrice=null;combo.holidayPrice=null;assertEquals(combo.price,pricing.price(combo,"HOLIDAY"));assertEquals(combo.price,pricing.price(combo,"WEEKEND"));
-  combo.holidayPrice=BigDecimal.ZERO;assertEquals(BigDecimal.ZERO,pricing.price(combo,"HOLIDAY"));combo.kind=Kind.TICKET;assertEquals(combo.price,pricing.price(combo,"HOLIDAY"));
+  combo.holidayPrice=BigDecimal.ZERO;assertEquals(BigDecimal.ZERO,pricing.price(combo,"HOLIDAY"));combo.kind=Kind.SERVICE;assertEquals(combo.price,pricing.price(combo,"HOLIDAY"));
  }
  @Test void existingOrderPriceDoesNotChangeWhenPricesOrCalendarChange(){
   var b=order(LocalDate.of(2027,1,2),Channel.COUNTER);combo.holidayPrice=BigDecimal.valueOf(999);products.saveAndFlush(combo);

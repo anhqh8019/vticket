@@ -4,7 +4,7 @@ export function dayType(date, holidays = []) {
   return day === 0 || day === 6 ? 'WEEKEND' : 'WEEKDAY';
 }
 export function priceForDate(product, date, holidays = []) {
-  if (product.kind !== 'COMBO') return Number(product.price);
+  if (product.kind !== 'COMBO' && product.kind !== 'TICKET') return Number(product.price);
   const type = dayType(date, holidays);
   if (type === 'HOLIDAY' && product.holidayPrice != null) return Number(product.holidayPrice);
   if (type === 'WEEKEND' && product.weekendPrice != null) return Number(product.weekendPrice);

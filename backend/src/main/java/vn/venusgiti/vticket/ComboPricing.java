@@ -9,7 +9,7 @@ public class ComboPricing {
  ComboPricing(Holidays holidays){this.holidays=holidays;}
  public String dayType(LocalDate date){return holidays.existsById(date)?"HOLIDAY":date.getDayOfWeek()==DayOfWeek.SATURDAY||date.getDayOfWeek()==DayOfWeek.SUNDAY?"WEEKEND":"WEEKDAY";}
  public BigDecimal price(Product product,String dayType){
-  if(product.kind==Kind.COMBO){
+  if(product.kind==Kind.COMBO||product.kind==Kind.TICKET){
    if(dayType.equals("HOLIDAY")&&product.holidayPrice!=null)return product.holidayPrice;
    if(dayType.equals("WEEKEND")&&product.weekendPrice!=null)return product.weekendPrice;
   }

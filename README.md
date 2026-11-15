@@ -205,7 +205,7 @@ quản trị viên hoạt động. Thao tác quản lý được ghi nhật ký,
 Trong Tạo/Sửa combo, cấu hình giá ngày thường, cuối tuần và lễ Tết **trên một vé
 mua**. Thứ Bảy/Chủ nhật là cuối tuần; ngày có trong lịch lễ ưu tiên giá lễ Tết.
 Giá đặc biệt để trống dùng giá ngày thường; giá bằng 0 được giữ đúng là 0.
-Các loại vé lẻ và dịch vụ không đổi giá theo lịch. Số vé tặng không tính tiền.
+Loại vé lẻ cũng hỗ trợ giá cuối tuần/lễ Tết riêng; dịch vụ giữ giá cố định. Số vé tặng không tính tiền.
 
 Quản trị → **Lịch lễ Tết** cho phép chọn năm, thêm/sửa/bỏ ngày và lưu lịch năm đó.
 V10 nạp đúng 20 ngày năm 2027 do khách hàng cung cấp: 01–03/01, 07–10/02,
@@ -217,3 +217,8 @@ backend tự tính lại và lưu đơn giá vào từng dòng đơn. Đơn đã
 thanh toán) giữ nguyên đơn giá sau khi sửa giá/lịch. Voucher vẫn giảm trên tổng
 hóa đơn đã tính theo lịch. Cần cập nhật cả backend/frontend; Flyway tự chạy V10,
 không sửa giá combo cũ.
+
+Giá loại vé dùng cùng lịch và quy tắc ưu tiên như combo; cấu hình trong Tạo/Sửa
+loại vé. Giá combo được cấu hình riêng, không bị giá loại vé tham chiếu ghi đè.
+Nâng cấp phần này không cần migration mới nếu V10 đã chạy; cập nhật cả backend
+và frontend. Vé cũ chưa có giá đặc biệt tiếp tục dùng giá ngày thường.

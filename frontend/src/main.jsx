@@ -491,7 +491,7 @@ function Shop({ counter, products, run, busy, placed }) {
           </p>
           {calendarError && <p className="alert">{calendarError}</p>}
           {!calendarReady && !calendarError && <p>Đang tải lịch giá…</p>}
-          {calendarReady && <p className="muted">Giá combo theo ngày sử dụng: {{WEEKDAY:"Ngày thường",WEEKEND:"Cuối tuần",HOLIDAY:"Lễ Tết"}[dayType(date,calendar.days)]}.</p>}
+          {calendarReady && <p className="muted">Giá vé và combo theo ngày sử dụng: {{WEEKDAY:"Ngày thường",WEEKEND:"Cuối tuần",HOLIDAY:"Lễ Tết"}[dayType(date,calendar.days)]}.</p>}
           {quantityErrors.map((error) => (
             <p className="alert" key={error}>
               {error}
@@ -1268,7 +1268,7 @@ function Manage({ run, busy, refreshCatalog }) {
                       <td>{labels[p.kind]}</td>
                       <td>
                         {money(p.price)}
-                        {p.kind === "COMBO" && <><small>/ vé mua · Ngày thường</small><small>Cuối tuần: {money(p.weekendPrice ?? p.price)}</small><small>Lễ Tết: {money(p.holidayPrice ?? p.price)}</small></>}
+                        {p.kind !== "SERVICE" && <><small>{p.kind === "COMBO" ? "/ vé mua · Ngày thường" : "/ vé · Ngày thường"}</small><small>Cuối tuần: {money(p.weekendPrice ?? p.price)}</small><small>Lễ Tết: {money(p.holidayPrice ?? p.price)}</small></>}
                       </td>
                       {tab === "combos" && (
                         <td>
@@ -2157,8 +2157,8 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           name: f.get("name"),
           description: f.get("description"),
           price: Number(f.get("price")),
-          weekendPrice: kind === "COMBO" && f.get("weekendPrice") !== "" ? Number(f.get("weekendPrice")) : null,
-          holidayPrice: kind === "COMBO" && f.get("holidayPrice") !== "" ? Number(f.get("holidayPrice")) : null,
+          weekendPrice: kind !== "SERVICE" && f.get("weekendPrice") !== "" ? Number(f.get("weekendPrice")) : null,
+          holidayPrice: kind !== "SERVICE" && f.get("holidayPrice") !== "" ? Number(f.get("holidayPrice")) : null,
           kind,
           active: f.get("active") === "on",
           includedServiceIds: kind === "SERVICE" ? [] : ids,
@@ -2218,7 +2218,7 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           label={
             kind === "COMBO"
               ? "Đơn giá ngày thường / một vé mua (VND)"
-              : "Giá bán (VND)"
+              : kind === "TICKET" ? "Đơn giá ngày thường (VND)" : "Giá bán (VND)"
           }
           type="number"
           name="price"
@@ -2229,13 +2229,15 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           required
         />
       </div>
+      {kind !== "SERVICE" && <>
+        <div className="two-col">
+          <Field label={kind === "COMBO" ? "Đơn giá cuối tuần / một vé mua (VND)" : "Đơn giá cuối tuần (VND)"} name="weekendPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.weekendPrice ?? ""} placeholder="Để trống: dùng giá ngày thường" />
+          <Field label={kind === "COMBO" ? "Đơn giá lễ Tết / một vé mua (VND)" : "Đơn giá lễ Tết (VND)"} name="holidayPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.holidayPrice ?? ""} placeholder="Để trống: dùng giá ngày thường" />
+        </div>
+        <p className="muted">Cuối tuần: thứ Bảy, Chủ nhật. Lễ Tết ưu tiên theo lịch đã cấu hình trong mục Lịch lễ Tết. Giá tính theo ngày sử dụng.{kind === "COMBO" ? " Vé tặng không tính tiền." : ""}</p>
+      </>}
       {kind === "COMBO" && (
         <>
-          <div className="two-col">
-            <Field label="Đơn giá cuối tuần / một vé mua (VND)" name="weekendPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.weekendPrice ?? ""} placeholder="Để trống: dùng giá ngày thường" />
-            <Field label="Đơn giá lễ Tết / một vé mua (VND)" name="holidayPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.holidayPrice ?? ""} placeholder="Để trống: dùng giá ngày thường" />
-          </div>
-          <p className="muted">Cuối tuần: thứ Bảy, Chủ nhật. Lễ Tết ưu tiên theo lịch đã cấu hình trong mục Lịch lễ Tết. Giá tính theo ngày sử dụng; vé tặng không tính tiền.</p>
           <label className="field">
             Loại vé tham chiếu
             <select
