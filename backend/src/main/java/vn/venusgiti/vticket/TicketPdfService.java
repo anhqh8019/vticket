@@ -44,7 +44,7 @@ public class TicketPdfService {
     try(var canvas=new PDPageContentStream(document,page)){
      canvas.setNonStrokingColor(new Color(35,89,75));canvas.addRect(0,365,298,55);canvas.fill();
      text(canvas,font,22,24,386,"Venusgiti",Color.WHITE);
-     text(canvas,font,10,24,348,"VÉ ĐIỆN TỬ - "+t.visitDate,Color.DARK_GRAY);
+     text(canvas,font,10,24,348,(t.child?"VÉ TRẺ EM - ":"VÉ ĐIỆN TỬ - ")+t.visitDate,Color.DARK_GRAY);
      wrap(canvas,font,t.productName,13,24,325,250,2);
      var matrix=new MultiFormatWriter().encode(t.qrToken,BarcodeFormat.QR_CODE,600,600,Map.of(EncodeHintType.MARGIN,4,EncodeHintType.ERROR_CORRECTION,com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.M));
      var image=LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix));canvas.drawImage(image,74,157,150,150);

@@ -30,3 +30,13 @@ test('ticket prices follow calendar and remain independent from combo prices',()
  assert.equal(priceForDate({...ticket,holidayPrice:null},'2027-01-02',[{date:'2027-01-02'}]),250);
  assert.equal(priceForDate({...ticket,holidayPrice:0},'2027-01-02',[{date:'2027-01-02'}]),0);
 });
+test('child price uses separate base/weekend/holiday and never falls back to adult price',()=>{
+ const ticket={kind:'TICKET',price:250,weekendPrice:300,holidayPrice:400,child:true,childPrice:100,childWeekendPrice:120,childHolidayPrice:150};
+ for(const kind of ['TICKET','COMBO']){
+  const p={...ticket,kind};assert.equal(priceForDate(p,'2027-01-04'),100);assert.equal(priceForDate(p,'2027-01-09'),120);assert.equal(priceForDate(p,'2027-01-02',[{date:'2027-01-02'}]),150);
+  assert.equal(priceForDate({...p,childWeekendPrice:null},'2027-01-09'),100);
+  assert.equal(priceForDate({...p,childHolidayPrice:null},'2027-01-02',[{date:'2027-01-02'}]),100);
+  assert.equal(priceForDate({...p,childHolidayPrice:0},'2027-01-02',[{date:'2027-01-02'}]),0);
+  assert.equal(priceForDate({...p,childPrice:null},'2027-01-04'),null);
+ }
+});

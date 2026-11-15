@@ -17,10 +17,10 @@ function Field({ label, ...props }) {
 function PriceDayBadge({ product, date, holidays }) {
   if (product.kind !== "TICKET" && product.kind !== "COMBO") return null;
   const type = dayType(date, holidays);
-  const specialPrice = type === "HOLIDAY" ? product.holidayPrice : type === "WEEKEND" ? product.weekendPrice : null;
+  const specialPrice = type === "HOLIDAY" ? (product.child?product.childHolidayPrice:product.holidayPrice) : type === "WEEKEND" ? (product.child?product.childWeekendPrice:product.weekendPrice) : null;
   if (specialPrice == null) return null;
   const label = type === "HOLIDAY" ? "Giá lễ Tết" : "Giá cuối tuần";
-  const description = `${label} theo ngày sử dụng ${date.split("-").reverse().join("/")}. Giá ngày thường: ${money(product.price)}.`;
+  const description = `${label} theo ngày sử dụng ${date.split("-").reverse().join("/")}. Giá ngày thường: ${money(product.child?product.childPrice:product.price)}.`;
   return <span className={`price-day-badge ${type.toLowerCase()}`} title={description} aria-label={description}>
     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-12 5 2 2 4-4"/></svg>
     {label}
@@ -248,17 +248,20 @@ function Shop({ counter, products, run, busy, placed }) {
     api(`/public/holidays?year=${year}`).then(days=>{if(active)setCalendar({year,days});}).catch(()=>{if(active)setCalendarError("Không tải được lịch giá. Vui lòng tải lại trang.");});
     return () => {active=false;};
   }, [year]);
+  const [childModes, setChildModes] = useState({});
+  const isChild=p=>p.child ?? (counter && !!childModes[p.id] && p.kind!=="SERVICE");
+  const key=p=>isChild(p)?`${p.id}:child`:String(p.id);
   const calendarReady=calendar?.year===year&&!calendarError;
-  const effectivePrice=p=>priceForDate(p,date,calendarReady?calendar.days:[]);
-  const selected = products.filter((p) => qty[p.id]),
-    subtotal = selected.reduce((s, p) => s + effectivePrice(p) * qty[p.id], 0);
+  const effectivePrice=p=>priceForDate({...p,child:isChild(p)},date,calendarReady?calendar.days:[]);
+  const selected = products.flatMap(p => [{...p,child:false},...(counter&&p.kind!=="SERVICE"?[{...p,child:true}]:[])]).filter((p) => qty[key(p)]),
+    subtotal = selected.reduce((s, p) => s + effectivePrice(p) * qty[key(p)], 0);
   const quantityErrors = selected
-    .map((p) => comboQuantityError(p, qty[p.id]))
+    .map((p) => comboQuantityError(p, qty[key(p)]))
     .filter(Boolean);
   if (
     selected
       .filter((p) => p.kind !== "SERVICE")
-      .reduce((sum, p) => sum + comboTicketCount(p, qty[p.id]), 0) > 1000
+      .reduce((sum, p) => sum + comboTicketCount(p, qty[key(p)]), 0) > 1000
   )
     quantityErrors.push(
       "Tổng số vé nhận, gồm vé tặng, tối đa 1.000 vé mỗi đơn.",
@@ -272,8 +275,8 @@ function Shop({ counter, products, run, busy, placed }) {
         aria-label={"Giảm " + p.name}
         onClick={() =>
           change(
-            p.id,
-            (qty[p.id] || 0) -
+            key(p),
+            (qty[key(p)] || 0) -
               (p.kind === "COMBO" ? p.comboBuyQuantity || 1 : 1),
           )
         }
@@ -286,8 +289,8 @@ function Shop({ counter, products, run, busy, placed }) {
         max="1000"
         step="1"
         aria-label={"Số vé " + p.name}
-        value={qty[p.id] || 0}
-        onChange={(e) => change(p.id, Number(e.target.value))}
+        value={qty[key(p)] || 0}
+        onChange={(e) => change(key(p), Number(e.target.value))}
       />
       <button
         type="button"
@@ -295,8 +298,8 @@ function Shop({ counter, products, run, busy, placed }) {
         aria-label={"Tăng " + p.name}
         onClick={() =>
           change(
-            p.id,
-            (qty[p.id] || 0) +
+            key(p),
+            (qty[key(p)] || 0) +
               (p.kind === "COMBO" ? p.comboBuyQuantity || 1 : 1),
           )
         }
@@ -352,7 +355,8 @@ function Shop({ counter, products, run, busy, placed }) {
                   visitDate: date,
                   lines: selected.map((p) => ({
                     productId: p.id,
-                    quantity: qty[p.id],
+                    quantity: qty[key(p)],
+                    ...(counter ? {child: !!p.child} : {}),
                   })),
                 },
               }),
@@ -372,8 +376,7 @@ function Shop({ counter, products, run, busy, placed }) {
               onChange={(e) => T(e.target.value)}
             />
             <p className="muted">
-              Vé có hiệu lực trong ngày đã chọn. Chưa áp dụng hạn mức và giá trẻ
-              em.
+              Vé có hiệu lực trong ngày đã chọn. Chưa áp dụng hạn mức. Giá trẻ em chỉ bán tại quầy.
             </p>
           </div>
           {[
@@ -417,16 +420,22 @@ function Shop({ counter, products, run, busy, placed }) {
                               ? ` tặng ${p.comboGiftQuantity} vé`
                               : ""}
                             . Nhập số vé là bội số của {p.comboBuyQuantity}.{" "}
-                            {qty[p.id] > 0 &&
-                              `Bạn nhận ${comboTicketCount(p, qty[p.id])} vé (gồm vé tặng).`}
+                            {qty[key(p)] > 0 &&
+                              `Bạn nhận ${comboTicketCount(p, qty[key(p)])} vé (gồm vé tặng).`}
                           </p>
                         )}
+                        {counter && <label className="field">Đối tượng
+                          <select value={isChild(p)?"CHILD":"ADULT"} onChange={e=>setChildModes({...childModes,[p.id]:e.target.value==="CHILD"})}>
+                            <option value="ADULT">Người lớn</option>
+                            <option value="CHILD" disabled={p.childPrice==null}>Trẻ em{p.childPrice==null?" (chưa có giá)":""}</option>
+                          </select>
+                        </label>}
                         <div className="price-with-day">
                           <b className="price">
                             {money(effectivePrice(p))}
                             {p.kind === "COMBO" ? " / vé mua" : ""}
                           </b>
-                          {calendarReady && <PriceDayBadge product={p} date={date} holidays={calendar.days} />}
+                          {calendarReady && <PriceDayBadge product={{...p,child:isChild(p)}} date={date} holidays={calendar.days} />}
                         </div>
                         {quantity(p)}
                       </div>
@@ -490,11 +499,11 @@ function Shop({ counter, products, run, busy, placed }) {
             Ngày sử dụng: <b>{date.split("-").reverse().join("/")}</b>
           </p>
           {selected.map((p) => (
-            <div className="row summaryline" key={p.id}>
+            <div className="row summaryline" key={key(p)}>
               <span>
-                {qty[p.id]} × {p.name}
+                {qty[key(p)]} × {p.name}{counter ? (p.child ? " · Trẻ em" : p.kind!=="SERVICE" ? " · Người lớn" : "") : ""}
               </span>
-              <b>{money(effectivePrice(p) * qty[p.id])}</b>
+              <b>{money(effectivePrice(p) * qty[key(p)])}</b>
             </div>
           ))}
           <div className="row total">
@@ -612,7 +621,7 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
                   {b.lines.map((l, i) => (
                     <tr key={i}>
                       <td>
-                        {l.name}
+                        {l.name}{l.child && <small>Trẻ em</small>}
                         <small>{l.includedServices}</small>
                       </td>
                       <td>
@@ -647,7 +656,7 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
                 {tickets.slice(0, 20).map((t) => (
                   <div className="panel ticket" key={t.id}>
                     <b className="brandtext">♨ Venusgiti</b>
-                    <h3>{t.productName}</h3>
+                    <h3>{t.productName}{t.child && <small>Trẻ em</small>}</h3>
                     <img
                       src={"/api/public/qr/" + t.qrToken}
                       width="200"
@@ -2172,6 +2181,9 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           name: f.get("name"),
           description: f.get("description"),
           price: Number(f.get("price")),
+          childPrice: kind !== "SERVICE" && f.get("childPrice") !== "" ? Number(f.get("childPrice")) : null,
+          childWeekendPrice: kind !== "SERVICE" && f.get("childWeekendPrice") !== "" ? Number(f.get("childWeekendPrice")) : null,
+          childHolidayPrice: kind !== "SERVICE" && f.get("childHolidayPrice") !== "" ? Number(f.get("childHolidayPrice")) : null,
           weekendPrice: kind !== "SERVICE" && f.get("weekendPrice") !== "" ? Number(f.get("weekendPrice")) : null,
           holidayPrice: kind !== "SERVICE" && f.get("holidayPrice") !== "" ? Number(f.get("holidayPrice")) : null,
           kind,
@@ -2248,6 +2260,12 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
         <div className="two-col">
           <Field label={kind === "COMBO" ? "Đơn giá cuối tuần / một vé mua (VND)" : "Đơn giá cuối tuần (VND)"} name="weekendPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.weekendPrice ?? ""} placeholder="Để trống: dùng giá ngày thường" />
           <Field label={kind === "COMBO" ? "Đơn giá lễ Tết / một vé mua (VND)" : "Đơn giá lễ Tết (VND)"} name="holidayPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.holidayPrice ?? ""} placeholder="Để trống: dùng giá ngày thường" />
+        </div>
+        <h4>Giá trẻ em — chỉ bán tại quầy</h4>
+        <div className="two-col">
+          <Field label="Giá trẻ em ngày thường (VND)" name="childPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.childPrice ?? ""} placeholder="Để trống: không bán giá trẻ em" />
+          <Field label="Giá trẻ em cuối tuần (VND)" name="childWeekendPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.childWeekendPrice ?? ""} placeholder="Để trống: dùng giá trẻ em ngày thường" />
+          <Field label="Giá trẻ em lễ Tết (VND)" name="childHolidayPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.childHolidayPrice ?? ""} placeholder="Để trống: dùng giá trẻ em ngày thường" />
         </div>
         <p className="muted">Cuối tuần: thứ Bảy, Chủ nhật. Lễ Tết ưu tiên theo lịch đã cấu hình trong mục Lịch lễ Tết. Giá tính theo ngày sử dụng.{kind === "COMBO" ? " Vé tặng không tính tiền." : ""}</p>
       </>}

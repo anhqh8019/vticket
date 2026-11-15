@@ -20,6 +20,9 @@ public final class Domain {
   @Column(nullable=false,precision=18,scale=0) public BigDecimal price;
   @Column(precision=18,scale=0) public BigDecimal weekendPrice;
   @Column(precision=18,scale=0) public BigDecimal holidayPrice;
+  @Column(precision=18,scale=0) public BigDecimal childPrice;
+  @Column(precision=18,scale=0) public BigDecimal childWeekendPrice;
+  @Column(precision=18,scale=0) public BigDecimal childHolidayPrice;
   public Long comboTicketId;
   public Integer comboBuyQuantity;
   public Integer comboGiftQuantity;
@@ -67,6 +70,7 @@ public final class Domain {
  }
  @Entity(name="BookingLine") @Table(name="booking_lines")
  public static class BookingLine {
+  @Column(nullable=false) public boolean child;
   @Id @GeneratedValue(strategy=GenerationType.IDENTITY) public Long id;
   @Column(nullable=false) public Long productId;
   @Column(nullable=false,length=150) public String name;
@@ -80,6 +84,7 @@ public final class Domain {
  }
  @Entity(name="Ticket") @Table(name="tickets")
  public static class Ticket {
+  @Column(nullable=false) public boolean child;
   @Id @Column(length=36) public String id;
   @Column(nullable=false,length=36) public String bookingId;
   @Column(nullable=false,unique=true,length=36) public String qrToken;

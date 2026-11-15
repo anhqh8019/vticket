@@ -61,6 +61,43 @@ class ComboPricingIntegrationTest {
   base.weekendPrice=BigDecimal.valueOf(999);products.saveAndFlush(base);
   assertEquals(0,orders.findById(b.id).orElseThrow().total.compareTo(BigDecimal.valueOf(300)));
  }
+ @Test void childPricesFollowCalendarForTicketsAndCombosAtCounter(){
+  var base=products.findById(combo.comboTicketId).orElseThrow();base.childPrice=BigDecimal.valueOf(50);base.childWeekendPrice=BigDecimal.valueOf(60);base.childHolidayPrice=BigDecimal.valueOf(70);products.saveAndFlush(base);
+  combo.childPrice=BigDecimal.valueOf(40);combo.childWeekendPrice=BigDecimal.valueOf(45);combo.childHolidayPrice=BigDecimal.valueOf(55);products.saveAndFlush(combo);
+  for(var item:Map.of("2027-01-04",List.of(50,40),"2027-01-09",List.of(60,45),"2027-01-10",List.of(60,45),"2027-01-02",List.of(70,55)).entrySet()){
+   var b=bookings.create(new OrderInput("Test",null,"",LocalDate.parse(item.getKey()),null,List.of(new LineInput(base.id,1,true),new LineInput(combo.id,10,true))),Channel.COUNTER,"staff");
+   assertTrue(b.lines.stream().allMatch(l->l.child));assertEquals(0,b.total.compareTo(BigDecimal.valueOf(item.getValue().get(0)+item.getValue().get(1)*10)));
+  }
+ }
+ @Test void mixedAdultChildCartIssuesCorrectCategoriesAndKeepsPriceSnapshot(){
+  var base=products.findById(combo.comboTicketId).orElseThrow();base.childPrice=BigDecimal.valueOf(50);products.saveAndFlush(base);combo.childPrice=BigDecimal.valueOf(40);products.saveAndFlush(combo);
+  var b=bookings.create(new OrderInput("Test",null,"",LocalDate.of(2027,1,4),null,List.of(new LineInput(base.id,2,false),new LineInput(base.id,3,true),new LineInput(combo.id,10,false),new LineInput(combo.id,10,true))),Channel.COUNTER,"staff");
+  assertEquals(4,b.lines.size());assertEquals(0,b.total.compareTo(BigDecimal.valueOf(1750)));
+  base.childPrice=BigDecimal.valueOf(999);combo.childPrice=BigDecimal.valueOf(888);products.saveAndFlush(base);products.saveAndFlush(combo);
+  bookings.cash(b.id,"staff");var issued=bookings.ticketList(b.id);assertEquals(27,issued.size());assertEquals(14,issued.stream().filter(t->t.child).count());
+  assertEquals(0,orders.findById(b.id).orElseThrow().total.compareTo(BigDecimal.valueOf(1750)));
+ }
+ @Test void onlineChildRequestIsRejectedByPublicApi()throws Exception{
+  combo.childPrice=BigDecimal.ONE;products.saveAndFlush(combo);
+  var input=new OrderInput("Test",null,"",LocalDate.of(2027,1,4),null,List.of(new LineInput(combo.id,10,true)));
+  var json=tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(input);
+  mvc.perform(post("/api/public/orders").with(csrf()).contentType("application/json").content(json)).andExpect(status().isConflict());
+  mvc.perform(post("/api/staff/orders").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content(json)).andExpect(status().isOk()).andExpect(jsonPath("$.lines[0].child").value(true));
+ }
+ @Test void childPriceRequiresConfigurationAndFallbackIsChildBase(){
+  assertThrows(org.springframework.web.server.ResponseStatusException.class,()->pricing.price(combo,"HOLIDAY",true));
+  combo.childPrice=BigDecimal.valueOf(40);assertEquals(combo.childPrice,pricing.price(combo,"WEEKEND",true));assertEquals(combo.childPrice,pricing.price(combo,"HOLIDAY",true));
+  combo.childHolidayPrice=BigDecimal.ZERO;assertEquals(BigDecimal.ZERO,pricing.price(combo,"HOLIDAY",true));
+  var invalid=new OrderInput("Test",null,"",LocalDate.of(2027,1,4),null,List.of(new LineInput(combo.id,9,true)));
+  products.saveAndFlush(combo);assertThrows(org.springframework.web.server.ResponseStatusException.class,()->bookings.create(invalid,Channel.COUNTER,"staff"));
+ }
+ @Test void adminCanConfigureChildPricesAndRejectNegative()throws Exception{
+  var input=new ProductInput(combo.code.toUpperCase(Locale.ROOT),combo.name,"",Kind.COMBO,combo.price,true,Set.of(),combo.comboTicketId,10,1,combo.weekendPrice,combo.holidayPrice,BigDecimal.valueOf(40),BigDecimal.valueOf(45),BigDecimal.valueOf(55));
+  var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+  mvc.perform(put("/api/admin/products/"+combo.id).with(csrf()).with(httpBasic("admin","demo-admin-change-me")).contentType("application/json").content(mapper.writeValueAsString(input))).andExpect(status().isOk()).andExpect(jsonPath("$.childPrice").value(40)).andExpect(jsonPath("$.childHolidayPrice").value(55));
+  var bad=new ProductInput(combo.code.toUpperCase(Locale.ROOT),combo.name,"",Kind.COMBO,combo.price,true,Set.of(),combo.comboTicketId,10,1,null,null,BigDecimal.valueOf(-1),null,null);
+  mvc.perform(put("/api/admin/products/"+combo.id).with(csrf()).with(httpBasic("admin","demo-admin-change-me")).contentType("application/json").content(mapper.writeValueAsString(bad))).andExpect(status().isBadRequest());
+ }
  @Test void nullPricesFallBackAndServicesUseBase(){
   combo.weekendPrice=null;combo.holidayPrice=null;assertEquals(combo.price,pricing.price(combo,"HOLIDAY"));assertEquals(combo.price,pricing.price(combo,"WEEKEND"));
   combo.holidayPrice=BigDecimal.ZERO;assertEquals(BigDecimal.ZERO,pricing.price(combo,"HOLIDAY"));combo.kind=Kind.SERVICE;assertEquals(combo.price,pricing.price(combo,"HOLIDAY"));

@@ -222,3 +222,22 @@ Giá loại vé dùng cùng lịch và quy tắc ưu tiên như combo; cấu hì
 loại vé. Giá combo được cấu hình riêng, không bị giá loại vé tham chiếu ghi đè.
 Nâng cấp phần này không cần migration mới nếu V10 đã chạy; cập nhật cả backend
 và frontend. Vé cũ chưa có giá đặc biệt tiếp tục dùng giá ngày thường.
+
+### Giá trẻ em tại quầy (V11)
+
+Tạo/Sửa loại vé hoặc combo có ba giá trẻ em: ngày thường, cuối tuần, lễ Tết.
+Giá trẻ em ngày thường để trống nghĩa là chưa bán mức giá trẻ em. Giá trẻ em
+cuối tuần/lễ để trống dùng **giá trẻ em ngày thường**, không dùng giá người lớn.
+Quy tắc ngày sử dụng, ưu tiên lễ Tết và vé tặng giữ nguyên.
+
+Chỉ màn hình Bán tại quầy có chọn Người lớn/Trẻ em theo từng sản phẩm. Số lượng
+mỗi nhóm được giữ riêng khi chuyển lựa chọn, cho phép cùng một đơn có cả hai
+nhóm của cùng loại vé/combo. Combo mỗi nhóm vẫn phải đủ bội số. Khách online
+không có lựa chọn và API public từ chối `child=true`, kể cả tự sửa request.
+Đơn lưu nhóm giá/đơn giá; PDF đánh dấu vé trẻ em, giá cũ không bị đổi sau khi
+sửa bảng giá. Cập nhật backend/frontend và chạy migration tự động V11.
+
+Đây là nhóm **giá bán tại quầy**; việc cấp mã và đồng bộ Smile giữ theo loại vé,
+lô đã cấu hình. Không tự sửa `TicketOnsen.IsChild` hoặc mã loại vé Smile khi chọn
+giá trẻ em. Nếu Smile yêu cầu lô/mã riêng cho trẻ em, cần thiết lập luồng ánh xạ
+kho riêng trước khi dùng nhóm giá này cho loại vé đó.
