@@ -199,3 +199,21 @@ không đặt lại mật khẩu; hãy dùng màn hình Người dùng. Không x
 Khóa, đổi quyền hoặc đặt lại mật khẩu làm phiên cũ hết hiệu lực ở yêu cầu tiếp
 theo. Không thể tự khóa/hạ quyền tài khoản đang dùng và phải giữ ít nhất một
 quản trị viên hoạt động. Thao tác quản lý được ghi nhật ký, không ghi mật khẩu.
+
+### Giá combo theo ngày sử dụng (V10)
+
+Trong Tạo/Sửa combo, cấu hình giá ngày thường, cuối tuần và lễ Tết **trên một vé
+mua**. Thứ Bảy/Chủ nhật là cuối tuần; ngày có trong lịch lễ ưu tiên giá lễ Tết.
+Giá đặc biệt để trống dùng giá ngày thường; giá bằng 0 được giữ đúng là 0.
+Các loại vé lẻ và dịch vụ không đổi giá theo lịch. Số vé tặng không tính tiền.
+
+Quản trị → **Lịch lễ Tết** cho phép chọn năm, thêm/sửa/bỏ ngày và lưu lịch năm đó.
+V10 nạp đúng 20 ngày năm 2027 do khách hàng cung cấp: 01–03/01, 07–10/02,
+16–18/04, 30/04–03/05, 02–05/09, 24/11, 31/12. Đây là lịch kinh doanh tùy chỉnh;
+những năm khác cần nhập riêng. Chỉ quản trị viên có quyền sửa; thao tác có nhật ký.
+
+Khi mua online hoặc tại quầy, giao diện hiển thị giá theo ngày sử dụng được chọn;
+backend tự tính lại và lưu đơn giá vào từng dòng đơn. Đơn đã tạo (kể cả đang chờ
+thanh toán) giữ nguyên đơn giá sau khi sửa giá/lịch. Voucher vẫn giảm trên tổng
+hóa đơn đã tính theo lịch. Cần cập nhật cả backend/frontend; Flyway tự chạy V10,
+không sửa giá combo cũ.

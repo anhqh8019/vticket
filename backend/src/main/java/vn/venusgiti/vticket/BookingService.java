@@ -11,8 +11,9 @@ import vn.venusgiti.vticket.Requests.*;
 
 @Service @Transactional
 public class BookingService {
+ private final ComboPricing pricing;
  private final Products products; private final Vouchers vouchers; private final Bookings bookings; private final Tickets tickets; private final Audits audits; private final Clock clock; private final InventoryService inventory; private final TicketEmailQueue ticketEmails;
- BookingService(Products p,Vouchers v,Bookings b,Tickets t,Audits a,Clock c,InventoryService i,TicketEmailQueue emailQueue){products=p;vouchers=v;bookings=b;tickets=t;audits=a;clock=c;inventory=i;ticketEmails=emailQueue;}
+ BookingService(Products p,Vouchers v,Bookings b,Tickets t,Audits a,Clock c,InventoryService i,TicketEmailQueue emailQueue,ComboPricing pricing){this.pricing=pricing;products=p;vouchers=v;bookings=b;tickets=t;audits=a;clock=c;inventory=i;ticketEmails=emailQueue;}
  static void require(boolean condition,String message){ if(!condition)throw new ResponseStatusException(HttpStatus.CONFLICT,message); }
  static String phone(String value){return value==null?"":value.strip().replaceAll("[ -]","").replaceFirst("^\\+84","0");}
  private Instant now(){return clock.instant();}
@@ -24,14 +25,15 @@ public class BookingService {
   for(var item:input.lines()){var selected=products.findById(item.productId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy vé/dịch vụ"));if(selected.kind==Kind.COMBO&&selected.comboTicketId!=null)lockIds.add(selected.comboTicketId);}
   inventory.lockProducts(lockIds);
   Booking b=new Booking();b.id=UUID.randomUUID().toString();b.accessToken=UUID.randomUUID().toString();b.customerName=input.customerName().trim();b.phone=phone(input.phone());b.email=input.email()==null?null:input.email().strip();b.visitDate=input.visitDate();b.channel=channel;b.status=Status.PENDING;b.createdAt=now();b.expiresAt=now().plus(Duration.ofMinutes(15));b.soldBy=actor;b.subtotal=BigDecimal.ZERO;
+  String dayType=pricing.dayType(input.visitDate());
   Set<Long> seen=new HashSet<>();boolean hasTicket=false;
   for(LineInput item:input.lines()){
    require(seen.add(item.productId()),"Loại vé/dịch vụ bị trùng dòng");
    Product p=products.findById(item.productId()).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy vé/dịch vụ"));entityManager.refresh(p);require(p.active,"Vé/dịch vụ đã ngừng bán");
    Product base=p;int issued=item.quantity();Set<Long> serviceIds=new HashSet<>(p.includedServiceIds);
    if(p.kind==Kind.COMBO){require(p.comboTicketId!=null&&p.comboBuyQuantity!=null&&p.comboBuyQuantity>0&&p.comboGiftQuantity!=null&&p.comboGiftQuantity>=0,"Combo chưa cấu hình đủ loại vé và số lượng");require(item.quantity()>=p.comboBuyQuantity&&item.quantity()%p.comboBuyQuantity==0,"Combo "+p.name+" cần số vé là bội số của "+p.comboBuyQuantity);require(lockIds.contains(p.comboTicketId),"Cấu hình combo vừa thay đổi, vui lòng tạo lại đơn");base=products.findById(p.comboTicketId).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Vé gốc không tồn tại"));entityManager.refresh(base);require(base.kind==Kind.TICKET&&base.active,"Vé gốc của combo đã ngừng bán");issued=Math.addExact(item.quantity(),Math.multiplyExact(item.quantity()/p.comboBuyQuantity,p.comboGiftQuantity));serviceIds.addAll(base.includedServiceIds);}
-   BookingLine line=new BookingLine();line.productId=p.id;line.name=p.name;line.kind=p.kind;line.unitPrice=p.price;line.quantity=item.quantity();line.ticketProductId=p.kind==Kind.SERVICE?null:base.id;line.ticketQuantity=p.kind==Kind.SERVICE?0:issued;line.ticketProductName=p.kind==Kind.SERVICE?null:base.name;line.includedServices=serviceIds.stream().sorted().map(id->products.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Dịch vụ trong combo không tồn tại")).name).reduce((a,c)->a+", "+c).orElse("");
-   b.lines.add(line);b.subtotal=b.subtotal.add(p.price.multiply(BigDecimal.valueOf(item.quantity())));hasTicket|=p.kind!=Kind.SERVICE;
+   BookingLine line=new BookingLine();line.productId=p.id;line.name=p.name;line.kind=p.kind;line.unitPrice=pricing.price(p,dayType);line.quantity=item.quantity();line.ticketProductId=p.kind==Kind.SERVICE?null:base.id;line.ticketQuantity=p.kind==Kind.SERVICE?0:issued;line.ticketProductName=p.kind==Kind.SERVICE?null:base.name;line.includedServices=serviceIds.stream().sorted().map(id->products.findById(id).orElseThrow(()->new ResponseStatusException(HttpStatus.CONFLICT,"Dịch vụ trong combo không tồn tại")).name).reduce((a,c)->a+", "+c).orElse("");
+   b.lines.add(line);b.subtotal=b.subtotal.add(line.unitPrice.multiply(BigDecimal.valueOf(item.quantity())));hasTicket|=p.kind!=Kind.SERVICE;
   }
   require(hasTicket,"Đơn cần có ít nhất một vé hoặc combo");
   inventory.reserve(b);

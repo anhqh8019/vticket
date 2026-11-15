@@ -18,6 +18,8 @@ public final class Domain {
   @Column(length=1000) public String description;
   @Enumerated(EnumType.STRING) @Column(nullable=false,length=16) public Kind kind;
   @Column(nullable=false,precision=18,scale=0) public BigDecimal price;
+  @Column(precision=18,scale=0) public BigDecimal weekendPrice;
+  @Column(precision=18,scale=0) public BigDecimal holidayPrice;
   public Long comboTicketId;
   public Integer comboBuyQuantity;
   public Integer comboGiftQuantity;

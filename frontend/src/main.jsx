@@ -1,3 +1,4 @@
+import { priceForDate, dayType } from "./combo-pricing.js";
 import { comboQuantityError, comboTicketCount } from "./combo.js";
 import { parseSmileCodes } from "./smile-import.js";
 import React, { useState, useEffect } from "react";
@@ -227,8 +228,18 @@ function Shop({ counter, products, run, busy, placed }) {
       email: "",
       voucherCode: "",
     });
+  const [calendar, setCalendar] = useState(null);
+  const [calendarError, setCalendarError] = useState("");
+  const year = date.slice(0,4);
+  useEffect(() => {
+    let active=true;setCalendarError("");
+    api(`/public/holidays?year=${year}`).then(days=>{if(active)setCalendar({year,days});}).catch(()=>{if(active)setCalendarError("Không tải được lịch giá. Vui lòng tải lại trang.");});
+    return () => {active=false;};
+  }, [year]);
+  const calendarReady=calendar?.year===year&&!calendarError;
+  const effectivePrice=p=>priceForDate(p,date,calendarReady?calendar.days:[]);
   const selected = products.filter((p) => qty[p.id]),
-    subtotal = selected.reduce((s, p) => s + p.price * qty[p.id], 0);
+    subtotal = selected.reduce((s, p) => s + effectivePrice(p) * qty[p.id], 0);
   const quantityErrors = selected
     .map((p) => comboQuantityError(p, qty[p.id]))
     .filter(Boolean);
@@ -316,6 +327,7 @@ function Shop({ counter, products, run, busy, placed }) {
         className="layout"
         onSubmit={(e) => {
           e.preventDefault();
+          if (!calendarReady) return;
           run(async () => {
             if (quantityErrors.length) throw new Error(quantityErrors[0]);
             if (!selected.some((p) => p.kind !== "SERVICE"))
@@ -398,7 +410,7 @@ function Shop({ counter, products, run, busy, placed }) {
                           </p>
                         )}
                         <b className="price">
-                          {money(p.price)}
+                          {money(effectivePrice(p))}
                           {p.kind === "COMBO" ? " / vé mua" : ""}
                         </b>
                         {quantity(p)}
@@ -416,7 +428,7 @@ function Shop({ counter, products, run, busy, placed }) {
                 <div className="service row" key={p.id}>
                   <div>
                     <b>{p.name}</b>
-                    <p className="muted">{money(p.price)} / lượt</p>
+                    <p className="muted">{money(effectivePrice(p))} / lượt</p>
                   </div>
                   {quantity(p)}
                 </div>
@@ -467,7 +479,7 @@ function Shop({ counter, products, run, busy, placed }) {
               <span>
                 {qty[p.id]} × {p.name}
               </span>
-              <b>{money(p.price * qty[p.id])}</b>
+              <b>{money(effectivePrice(p) * qty[p.id])}</b>
             </div>
           ))}
           <div className="row total">
@@ -477,6 +489,9 @@ function Shop({ counter, products, run, busy, placed }) {
           <p className="muted">
             Số tiền sau giảm hiển thị ở bước xác nhận đơn.
           </p>
+          {calendarError && <p className="alert">{calendarError}</p>}
+          {!calendarReady && !calendarError && <p>Đang tải lịch giá…</p>}
+          {calendarReady && <p className="muted">Giá combo theo ngày sử dụng: {{WEEKDAY:"Ngày thường",WEEKEND:"Cuối tuần",HOLIDAY:"Lễ Tết"}[dayType(date,calendar.days)]}.</p>}
           {quantityErrors.map((error) => (
             <p className="alert" key={error}>
               {error}
@@ -484,7 +499,7 @@ function Shop({ counter, products, run, busy, placed }) {
           ))}
           <button
             className="full"
-            disabled={busy || !subtotal || quantityErrors.length > 0}
+            disabled={busy || !calendarReady || !subtotal || quantityErrors.length > 0}
           >
             Tạo đơn & xem thanh toán →
           </button>
@@ -1051,6 +1066,35 @@ function Orders({ run, busy, open }) {
     </>
   );
 }
+function HolidayManagement({ run, busy }) {
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [calendar, setCalendar] = useState(null);
+  const [days, setDays] = useState([]);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    let active=true;setCalendar(null);setSaved(false);setDays([]);
+    run(async () => {const rows=await api(`/admin/holidays?year=${year}`);if(active){setDays(rows);setCalendar(year);}});
+    return () => {active=false;};
+  }, [year]);
+  return <section className="panel">
+    <h2>Lịch lễ Tết theo năm</h2>
+    <p className="muted">Thứ Bảy và Chủ nhật áp dụng giá cuối tuần. Các ngày trong lịch này ưu tiên giá lễ Tết, kể cả khi trùng cuối tuần. Lịch 2027 đã được nạp theo danh sách cung cấp.</p>
+    <label className="field">Năm<select value={year} disabled={busy} onChange={e=>setYear(Number(e.target.value))}>{Array.from({length:101},(_,i)=>2000+i).map(y=><option key={y} value={y}>{y}</option>)}</select></label>
+    {calendar===year && <form onSubmit={e=>{e.preventDefault();setSaved(false);run(async()=>{const rows=await api(`/admin/holidays/${year}`,{method:"PUT",body:{days}});setDays(rows);setSaved(true);});}}>
+      {days.length===0 && <p>Chưa có ngày lễ trong năm này. Bạn có thể thêm bên dưới.</p>}
+      {days.map((day,i)=><div className="row" key={i}>
+        <Field label="Ngày lễ" type="date" required min={`${year}-01-01`} max={`${year}-12-31`} value={day.date} onChange={e=>{setDays(days.map((d,j)=>j===i?{...d,date:e.target.value}:d));setSaved(false);}} />
+        <Field label="Tên ngày lễ" required maxLength={150} value={day.name} onChange={e=>{setDays(days.map((d,j)=>j===i?{...d,name:e.target.value}:d));setSaved(false);}} />
+        <button type="button" className="secondary" disabled={busy} onClick={()=>{setDays(days.filter((_,j)=>j!==i));setSaved(false);}}>Bỏ ngày</button>
+      </div>)}
+      <button type="button" className="secondary" disabled={busy||days.length>=366} onClick={()=>{setDays([...days,{date:"",name:""}]);setSaved(false);}}>+ Thêm ngày lễ</button>{" "}
+      <button disabled={busy}>Lưu lịch năm {year}</button>
+      {saved && <p role="status">Đã lưu lịch lễ Tết năm {year}.</p>}
+      <p className="muted">Thay đổi lịch áp dụng cho đơn tạo mới. Đơn đã tạo giữ nguyên giá đã chốt. Chuyển năm trước khi lưu sẽ bỏ các thay đổi chưa lưu.</p>
+    </form>}
+  </section>;
+}
+
 function UserManagement({ run, busy }) {
   const [users, setUsers] = useState([]);
   const [editing, setEditing] = useState(null);
@@ -1127,6 +1171,7 @@ function Manage({ run, busy, refreshCatalog }) {
           ["vouchers", "Voucher khách hàng"],
           ["receipts", "Đối soát VietQR"],
           ["smile", "Smile Onsen"],
+          ["holidays", "Lịch lễ Tết"],
           ["users", "Người dùng"],
           ["audit", "Nhật ký"],
         ].map(([k, l]) => (
@@ -1223,7 +1268,7 @@ function Manage({ run, busy, refreshCatalog }) {
                       <td>{labels[p.kind]}</td>
                       <td>
                         {money(p.price)}
-                        {p.kind === "COMBO" && <small>/ vé mua</small>}
+                        {p.kind === "COMBO" && <><small>/ vé mua · Ngày thường</small><small>Cuối tuần: {money(p.weekendPrice ?? p.price)}</small><small>Lễ Tết: {money(p.holidayPrice ?? p.price)}</small></>}
                       </td>
                       {tab === "combos" && (
                         <td>
@@ -1263,6 +1308,7 @@ function Manage({ run, busy, refreshCatalog }) {
           </div>
         </>
       )}
+      {tab === "holidays" && <HolidayManagement run={run} busy={busy} />}
       {tab === "users" && <UserManagement run={run} busy={busy} />}
       {tab === "batches" && (
         <BatchManager products={products} run={run} busy={busy} />
@@ -2111,6 +2157,8 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           name: f.get("name"),
           description: f.get("description"),
           price: Number(f.get("price")),
+          weekendPrice: kind === "COMBO" && f.get("weekendPrice") !== "" ? Number(f.get("weekendPrice")) : null,
+          holidayPrice: kind === "COMBO" && f.get("holidayPrice") !== "" ? Number(f.get("holidayPrice")) : null,
           kind,
           active: f.get("active") === "on",
           includedServiceIds: kind === "SERVICE" ? [] : ids,
@@ -2169,7 +2217,7 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
         <Field
           label={
             kind === "COMBO"
-              ? "Đơn giá một vé mua trong combo (VND)"
+              ? "Đơn giá ngày thường / một vé mua (VND)"
               : "Giá bán (VND)"
           }
           type="number"
@@ -2183,6 +2231,11 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
       </div>
       {kind === "COMBO" && (
         <>
+          <div className="two-col">
+            <Field label="Đơn giá cuối tuần / một vé mua (VND)" name="weekendPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.weekendPrice ?? ""} placeholder="Để trống: dùng giá ngày thường" />
+            <Field label="Đơn giá lễ Tết / một vé mua (VND)" name="holidayPrice" type="number" min="0" max="1000000000" step="1" defaultValue={product?.holidayPrice ?? ""} placeholder="Để trống: dùng giá ngày thường" />
+          </div>
+          <p className="muted">Cuối tuần: thứ Bảy, Chủ nhật. Lễ Tết ưu tiên theo lịch đã cấu hình trong mục Lịch lễ Tết. Giá tính theo ngày sử dụng; vé tặng không tính tiền.</p>
           <label className="field">
             Loại vé tham chiếu
             <select
