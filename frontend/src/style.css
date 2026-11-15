@@ -744,3 +744,30 @@ a.button {
   min-width: 0;
   padding: 8px;
 }
+
+.price-with-day {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+.price-with-day .price { margin: 0; }
+.price-day-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  border: 1px solid #e6bd6d;
+  background: #fff4d8;
+  color: #784800;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.price-day-badge svg { flex-shrink: 0; }
+.price-day-badge.holiday {
+  background: #fff0e9;
+  border-color: #e8b29b;
+  color: #8a381b;
+}

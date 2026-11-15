@@ -14,6 +14,18 @@ function Field({ label, ...props }) {
     </label>
   );
 }
+function PriceDayBadge({ product, date, holidays }) {
+  if (product.kind !== "TICKET" && product.kind !== "COMBO") return null;
+  const type = dayType(date, holidays);
+  const specialPrice = type === "HOLIDAY" ? product.holidayPrice : type === "WEEKEND" ? product.weekendPrice : null;
+  if (specialPrice == null) return null;
+  const label = type === "HOLIDAY" ? "Giá lễ Tết" : "Giá cuối tuần";
+  const description = `${label} theo ngày sử dụng ${date.split("-").reverse().join("/")}. Giá ngày thường: ${money(product.price)}.`;
+  return <span className={`price-day-badge ${type.toLowerCase()}`} title={description} aria-label={description}>
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18m-12 5 2 2 4-4"/></svg>
+    {label}
+  </span>;
+}
 function App() {
   const [page, P] = useState("shop"),
     [user, U] = useState(null),
@@ -409,10 +421,13 @@ function Shop({ counter, products, run, busy, placed }) {
                               `Bạn nhận ${comboTicketCount(p, qty[p.id])} vé (gồm vé tặng).`}
                           </p>
                         )}
-                        <b className="price">
-                          {money(effectivePrice(p))}
-                          {p.kind === "COMBO" ? " / vé mua" : ""}
-                        </b>
+                        <div className="price-with-day">
+                          <b className="price">
+                            {money(effectivePrice(p))}
+                            {p.kind === "COMBO" ? " / vé mua" : ""}
+                          </b>
+                          {calendarReady && <PriceDayBadge product={p} date={date} holidays={calendar.days} />}
+                        </div>
                         {quantity(p)}
                       </div>
                     </article>
