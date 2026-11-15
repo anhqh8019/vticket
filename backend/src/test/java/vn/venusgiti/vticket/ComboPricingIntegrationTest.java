@@ -36,7 +36,7 @@ class ComboPricingIntegrationTest {
  }
  @Test void adminPersistsSpecialPricesAndRejectsNegativePrice()throws Exception{
   var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
-  var input=new ProductInput("PRICE-"+UUID.randomUUID().toString().substring(0,12),"Combo giá","",Kind.COMBO,BigDecimal.valueOf(100),true,Set.of(),combo.comboTicketId,10,1,BigDecimal.valueOf(150),BigDecimal.valueOf(200));
+  var input=new ProductInput("PRICE-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(Locale.ROOT),"Combo giá","",Kind.COMBO,BigDecimal.valueOf(100),true,Set.of(),combo.comboTicketId,10,1,BigDecimal.valueOf(150),BigDecimal.valueOf(200));
   mvc.perform(post("/api/admin/products").with(csrf()).with(httpBasic("admin","demo-admin-change-me")).contentType("application/json").content(mapper.writeValueAsString(input))).andExpect(status().isOk()).andExpect(jsonPath("$.weekendPrice").value(150)).andExpect(jsonPath("$.holidayPrice").value(200));
   var invalid=new ProductInput("BAD-PRICE","Combo giá","",Kind.COMBO,BigDecimal.valueOf(100),true,Set.of(),combo.comboTicketId,10,1,BigDecimal.valueOf(-1),BigDecimal.valueOf(200));
   mvc.perform(post("/api/admin/products").with(csrf()).with(httpBasic("admin","demo-admin-change-me")).contentType("application/json").content(mapper.writeValueAsString(invalid))).andExpect(status().isBadRequest());
