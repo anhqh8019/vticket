@@ -771,3 +771,61 @@ a.button {
   border-color: #e8b29b;
   color: #8a381b;
 }
+
+.product-details-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+.product-details-link:hover { background: transparent; color: #a26d24; }
+.product-detail-dialog {
+  width: min(1060px, 94vw);
+  max-width: 94vw;
+  max-height: 90dvh;
+  padding: 0;
+  border: 1px solid #d8e2da;
+  border-radius: 18px;
+  color: var(--green);
+  background: #fff;
+  box-shadow: 0 22px 80px #002b2340;
+  overflow: auto;
+}
+.product-detail-dialog::backdrop { background: #062e2ac2; }
+.product-detail-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 25px;
+}
+.product-detail-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.product-detail-image { background: #eef3ec; display: flex; align-items: center; justify-content: center; min-width: 0; }
+.product-detail-image > img { display: block; width: 100%; height: auto; object-fit: contain; }
+.product-detail-copy { padding: 52px 30px 32px; min-width: 0; }
+.product-detail-copy h2 { margin: 10px 0 18px; overflow-wrap: anywhere; }
+.product-detail-description { margin-top: 20px; padding: 20px; background: #faf4df; border-radius: 10px; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.8; }
+.product-detail-combo { line-height: 1.7; }
+.product-detail-placeholder { min-height: 320px; padding: 40px; display: grid; gap: 30px; justify-items: center; text-align: center; }
+.product-detail-placeholder img { width: 150px; max-width: 100%; }
+.product-detail-settings { border-top: 1px solid #d8e2da; padding-top: 16px; margin-top: 16px; }
+.product-detail-preview { display: block; max-width: 100%; max-height: 240px; object-fit: contain; margin: 12px 0; }
+@media (max-width: 700px) {
+  .product-detail-grid { grid-template-columns: 1fr; }
+  .product-detail-image > img { max-height: 42dvh; }
+  .product-detail-copy { padding: 24px 20px; }
+  .product-detail-description { padding: 15px; }
+}

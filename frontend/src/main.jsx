@@ -1,7 +1,7 @@
 import { priceForDate, dayType } from "./combo-pricing.js";
 import { comboQuantityError, comboTicketCount } from "./combo.js";
 import { parseSmileCodes } from "./smile-import.js";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import { api, login, money, today, labels } from "./api";
 import { rememberStaffPage, restoredStaffPage, forgetStaffPage } from "./auth-navigation.js";
@@ -26,6 +26,33 @@ function PriceDayBadge({ product, date, holidays }) {
     {label}
   </span>;
 }
+function ProductDetailsModal({ product, date, holidays = [], close }) {
+  const ref=useRef(null);
+  useEffect(()=>{
+    const dialog=ref.current, previous=document.activeElement, overflow=document.body.style.overflow;
+    if(!dialog.open)dialog.showModal();document.body.style.overflow="hidden";
+    return ()=>{document.body.style.overflow=overflow;previous?.focus?.();};
+  },[]);
+  const [imageFailed,setImageFailed]=useState(false);
+  const price=priceForDate(product,date,holidays);
+  return <dialog ref={ref} className="product-detail-dialog" aria-labelledby="product-detail-title" onCancel={close} onClick={e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();}}}>
+    <button type="button" className="product-detail-close secondary" aria-label="Đóng chi tiết" autoFocus onClick={close}>×</button>
+    <div className="product-detail-grid">
+      <div className="product-detail-image">
+        {product.detailImageUrl&&!imageFailed ? <img src={product.detailImageUrl} alt={product.name} onError={()=>setImageFailed(true)} /> : <div className="product-detail-placeholder"><img src="/venusgiti-logo.svg" alt="Venusgiti" /><span>{product.name}</span></div>}
+      </div>
+      <div className="product-detail-copy">
+        <span className="eyebrow">{product.kind==="COMBO"?"COMBO ƯU ĐÃI":"VÉ TRẢI NGHIỆM"}{product.child?" · TRẺ EM":""}</span>
+        <h2 id="product-detail-title">{product.name}</h2>
+        <div className="price-with-day"><b className="price">{money(price)}{product.kind==="COMBO"?" / vé mua":" / vé"}</b><PriceDayBadge product={product} date={date} holidays={holidays} /></div>
+        <p className="muted">Ngày sử dụng: {date.split("-").reverse().join("/")}</p>
+        {product.kind==="COMBO" && <p className="product-detail-combo">Mỗi nhóm mua {product.comboBuyQuantity} vé{product.comboGiftQuantity?`, tặng ${product.comboGiftQuantity} vé`:""}.</p>}
+        <div className="product-detail-description">{product.detailContent?.trim() || product.description?.trim() || "Thông tin chi tiết đang được cập nhật. Vui lòng liên hệ quầy để được hỗ trợ."}</div>
+      </div>
+    </div>
+  </dialog>;
+}
+
 function App() {
   const [page, P] = useState("shop"),
     [user, U] = useState(null),
@@ -240,6 +267,7 @@ function Shop({ counter, products, run, busy, placed }) {
       email: "",
       voucherCode: "",
     });
+  const [viewDetails, setViewDetails] = useState(null);
   const [calendar, setCalendar] = useState(null);
   const [calendarError, setCalendarError] = useState("");
   const year = date.slice(0,4);
@@ -338,6 +366,7 @@ function Shop({ counter, products, run, busy, placed }) {
           <h1>Bán vé tại quầy</h1>
         </>
       )}
+      {viewDetails && <ProductDetailsModal product={viewDetails} date={date} holidays={calendarReady?calendar.days:[]} close={()=>setViewDetails(null)} />}
       <form
         className="layout"
         onSubmit={(e) => {
@@ -438,6 +467,7 @@ function Shop({ counter, products, run, busy, placed }) {
                           {calendarReady && <PriceDayBadge product={{...p,child:isChild(p)}} date={date} holidays={calendar.days} />}
                         </div>
                         {quantity(p)}
+                        <button type="button" className="product-details-link" onClick={()=>setViewDetails({...p,child:isChild(p)})}>Xem chi tiết <span aria-hidden="true">→</span></button>
                       </div>
                     </article>
                   ))}
@@ -2170,16 +2200,34 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
             : "TICKET"),
     ),
     [ids, I] = useState(product?.includedServiceIds || []);
+  const [detailText,setDetailText]=useState(product?.detailContent || "");
+  const [imageData,setImageData]=useState(null);
+  const [imageReading,setImageReading]=useState(false);
+  const [imageInputKey,setImageInputKey]=useState(0);
+  const [imageError,setImageError]=useState("");
+  const imagePreview=imageData===null ? product?.detailImageUrl?.replace("/public/","/admin/") : imageData;
+  async function readDetailImage(e){
+    const input=e.currentTarget,file=input.files?.[0];if(!file)return;
+    setImageError("");
+    if(!["image/png","image/jpeg"].includes(file.type)||file.size>2097152){setImageError("Chọn ảnh PNG/JPG tối đa 2 MB.");input.value="";return;}
+    setImageReading(true);
+    try{const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error());reader.readAsDataURL(file);});setImageData(data);}
+    catch{setImageError("Không đọc được ảnh. Vui lòng chọn lại.");}
+    finally{setImageReading(false);}
+  }
   return (
     <form
       className="panel"
       onSubmit={(e) => {
         e.preventDefault();
+        if(imageReading)return;
         const f = new FormData(e.currentTarget);
         save({
           code: f.get("code").toUpperCase().trim(),
           name: f.get("name"),
           description: f.get("description"),
+          detailContent: kind !== "SERVICE" ? detailText : undefined,
+          detailImageData: kind !== "SERVICE" ? imageData : undefined,
           price: Number(f.get("price")),
           childPrice: kind !== "SERVICE" && f.get("childPrice") !== "" ? Number(f.get("childPrice")) : null,
           childWeekendPrice: kind !== "SERVICE" && f.get("childWeekendPrice") !== "" ? Number(f.get("childWeekendPrice")) : null,
@@ -2352,6 +2400,20 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           </div>
         </>
       )}
+      {kind!=="SERVICE" && <section className="product-detail-settings">
+        <h3>Nội dung popup “Xem chi tiết”</h3>
+        <div className="two-col">
+          <div>
+            <Field key={imageInputKey} label="Ảnh chi tiết (PNG/JPG, tối đa 2 MB)" type="file" accept="image/png,image/jpeg" disabled={busy||imageReading} onChange={readDetailImage} />
+            {imagePreview && <><img className="product-detail-preview" src={imagePreview} alt="Xem trước ảnh chi tiết" /><button type="button" className="secondary" disabled={busy||imageReading} onClick={()=>{setImageData("");setImageError("");setImageInputKey(k=>k+1);}}>Bỏ ảnh</button></>}
+            {imageReading && <p>Đang đọc ảnh…</p>}{imageError && <p className="alert" role="alert">{imageError}</p>}
+          </div>
+          <label className="field">Nội dung chi tiết
+            <textarea rows={12} maxLength={12000} value={detailText} onChange={e=>setDetailText(e.target.value)} placeholder={"Các dịch vụ bao gồm…\nĐiều kiện sử dụng…\nLưu ý cho khách hàng…"} />
+            <small>{detailText.length}/12.000 ký tự. Mỗi dòng được giữ nguyên trong popup. Nếu để trống, popup dùng mô tả ngắn.</small>
+          </label>
+        </div>
+      </section>}
       <label className="check">
         <input
           type="checkbox"
@@ -2361,7 +2423,7 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
         Đang bán
       </label>
       <div className="tabs">
-        <button disabled={busy}>Lưu</button>
+        <button disabled={busy||imageReading}>Lưu</button>
         <button type="button" className="secondary" onClick={close}>
           Đóng
         </button>

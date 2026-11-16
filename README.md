@@ -241,3 +241,25 @@ sửa bảng giá. Cập nhật backend/frontend và chạy migration tự độ
 lô đã cấu hình. Không tự sửa `TicketOnsen.IsChild` hoặc mã loại vé Smile khi chọn
 giá trẻ em. Nếu Smile yêu cầu lô/mã riêng cho trẻ em, cần thiết lập luồng ánh xạ
 kho riêng trước khi dùng nhóm giá này cho loại vé đó.
+
+### Popup chi tiết vé/combo (V12)
+
+Mỗi thẻ vé/combo tại màn hình đặt vé và bán tại quầy có **Xem chi tiết**. Popup
+hiển thị ảnh trái, nội dung phải (điện thoại xếp dọc), giá theo ngày sử dụng và
+nhóm người lớn/trẻ em đang chọn. Đóng bằng nút ×, Escape hoặc bấm ngoài popup.
+
+Trong Tạo/Sửa loại vé hoặc combo → **Nội dung popup “Xem chi tiết”**, tải ảnh
+PNG/JPG tối đa 2 MB, tối đa 6000 px mỗi cạnh và 16 megapixel; nhập nội dung tới
+12.000 ký tự. Nội dung giữ xuống dòng, hiển thị dạng văn bản, không thực thi HTML.
+Có xem trước và bỏ ảnh. Chưa có nội dung thì dùng mô tả ngắn; chưa có ảnh dùng
+khung thương hiệu Venusgiti. Ảnh lưu trong CSDL, được sao lưu cùng database.
+
+Nâng cấp backend/frontend để Flyway chạy V12. Nếu dùng Nginx, đặt trong khối
+`server` hoặc `location /api/` rồi kiểm tra và reload Nginx:
+
+```nginx
+client_max_body_size 4m;
+```
+
+Ảnh được gửi dạng JSON base64 cùng sản phẩm (2 MB ảnh ≈ 2,8 MB JSON), nên cần
+mức giới hạn trên để tránh HTTP 413 khi tải ảnh lớn hơn mặc định của Nginx.

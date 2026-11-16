@@ -23,6 +23,11 @@ public final class Domain {
   @Column(precision=18,scale=0) public BigDecimal childPrice;
   @Column(precision=18,scale=0) public BigDecimal childWeekendPrice;
   @Column(precision=18,scale=0) public BigDecimal childHolidayPrice;
+  @Column(length=12000) public String detailContent;
+  @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=2097152) public byte[] detailImage;
+  @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=30) public String detailImageType;
+  @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=36) public String detailImageVersion;
+  public String getDetailImageUrl(){return detailImageVersion==null?null:"/api/public/products/"+id+"/image?v="+detailImageVersion;}
   public Long comboTicketId;
   public Integer comboBuyQuantity;
   public Integer comboGiftQuantity;
