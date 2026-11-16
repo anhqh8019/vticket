@@ -26,6 +26,23 @@ class ProductDetailsIntegrationTest {
  byte[] image()throws Exception{var out=new ByteArrayOutputStream();ImageIO.write(new BufferedImage(2,2,BufferedImage.TYPE_INT_RGB),"png",out);return out.toByteArray();}
  String data()throws Exception{return "data:image/png;base64,"+Base64.getEncoder().encodeToString(image());}
  ProductInput input(Kind kind,String content,String image,boolean active){return new ProductInput(base.code,base.name,"Mô tả ngắn",kind,BigDecimal.valueOf(100),active,Set.of(),kind==Kind.COMBO?base.id:null,kind==Kind.COMBO?10:null,kind==Kind.COMBO?1:null,null,null,null,null,null,content,image);}
+ ProductInput gallery(List<String> images){var in=input(Kind.TICKET,"Thư viện ảnh",null,true);return new ProductInput(in.code(),in.name(),in.description(),in.kind(),in.price(),in.active(),in.includedServiceIds(),null,null,null,null,null,null,null,null,in.detailContent(),null,images);}
+ @Test void galleryKeepsExistingImageAndAddsTwoThenRemovesOne()throws Exception{
+  mvc.perform(put("/api/admin/products/"+base.id).with(httpBasic("admin","demo-admin-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(input(Kind.TICKET,"Ảnh cũ",data(),true)))).andExpect(status().isOk());
+  var before=products.findById(base.id).orElseThrow().detailImageVersion;
+  mvc.perform(put("/api/admin/products/"+base.id).with(httpBasic("admin","demo-admin-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(gallery(Arrays.asList(null,data(),data()))))).andExpect(status().isOk()).andExpect(jsonPath("$.detailImageUrls.length()").value(3)).andExpect(jsonPath("$.detailImage2").doesNotExist()).andExpect(jsonPath("$.detailImage3").doesNotExist());
+  var saved=products.findById(base.id).orElseThrow();assertEquals(before,saved.detailImageVersion);assertNotNull(saved.detailImage2);assertNotNull(saved.detailImage3);
+  for(int slot=0;slot<3;slot++)mvc.perform(get("/api/public/products/"+base.id+"/images/"+slot)).andExpect(status().isOk()).andExpect(content().bytes(image()));
+  mvc.perform(get("/api/public/products/"+base.id+"/images/3")).andExpect(status().isNotFound());
+  mvc.perform(put("/api/admin/products/"+base.id).with(httpBasic("admin","demo-admin-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(gallery(Arrays.asList(null,"",null))))).andExpect(status().isOk());
+  saved=products.findById(base.id).orElseThrow();assertNotNull(saved.detailImage);assertNull(saved.detailImage2);assertNotNull(saved.detailImage3);
+  mvc.perform(get("/api/public/products/"+base.id+"/images/1")).andExpect(status().isNotFound());
+ }
+ @Test void galleryRejectsFourthImageAndRollsBackBadImage()throws Exception{
+  mvc.perform(put("/api/admin/products/"+base.id).with(httpBasic("admin","demo-admin-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(gallery(List.of(data(),data(),data(),data()))))).andExpect(status().isBadRequest());
+  mvc.perform(put("/api/admin/products/"+base.id).with(httpBasic("admin","demo-admin-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(gallery(List.of(data(),"data:image/png;base64,bm90LWFuLWltYWdl"))))).andExpect(status().isBadRequest());
+  var saved=products.findById(base.id).orElseThrow();assertNull(saved.detailImage);assertNull(saved.detailImage2);
+ }
  @Test void ticketAndComboExposeDetailsAndServeImageWithoutInliningBinary()throws Exception{
   for(var kind:List.of(Kind.TICKET,Kind.COMBO)){
    var in=input(kind,"Dịch vụ bao gồm\nĐiều kiện sử dụng",data(),true);

@@ -258,8 +258,17 @@ Nâng cấp backend/frontend để Flyway chạy V12. Nếu dùng Nginx, đặt 
 `server` hoặc `location /api/` rồi kiểm tra và reload Nginx:
 
 ```nginx
-client_max_body_size 4m;
+client_max_body_size 10m;
 ```
 
-Ảnh được gửi dạng JSON base64 cùng sản phẩm (2 MB ảnh ≈ 2,8 MB JSON), nên cần
+Ảnh được gửi dạng JSON base64 cùng sản phẩm (tối đa 3 × 2 MB ảnh ≈ 8,4 MB JSON), nên cần
 mức giới hạn trên để tránh HTTP 413 khi tải ảnh lớn hơn mặc định của Nginx.
+
+### Thư viện tối đa 3 ảnh (V13)
+
+Tạo/Sửa vé hoặc combo có 3 ô ảnh theo thứ tự. Popup xếp các ảnh từ trên xuống
+trong cột trái, căn phía trên; bỏ qua ô trống. Mỗi ảnh giữ giới hạn PNG/JPG 2 MB.
+V13 giữ nguyên ảnh V12 ở vị trí đầu tiên và bổ sung hai vị trí mới. Có thể thay
+hoặc bỏ riêng từng ảnh; sửa nội dung không làm mất ảnh đã lưu. Cập nhật backend
+và frontend, nâng `client_max_body_size` của Nginx lên **10m** rồi reload để lưu
+được cả ba ảnh dung lượng lớn trong một lần.

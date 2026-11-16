@@ -27,6 +27,15 @@ public final class Domain {
   @com.fasterxml.jackson.annotation.JsonIgnore @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.VARBINARY) @Column(length=2097152,columnDefinition="varbinary") public byte[] detailImage;
   @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=30) public String detailImageType;
   @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=36) public String detailImageVersion;
+  @com.fasterxml.jackson.annotation.JsonIgnore @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.VARBINARY) @Column(length=2097152,columnDefinition="varbinary") public byte[] detailImage2;
+  @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=30) public String detailImageType2;
+  @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=36) public String detailImageVersion2;
+  @com.fasterxml.jackson.annotation.JsonIgnore @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.VARBINARY) @Column(length=2097152,columnDefinition="varbinary") public byte[] detailImage3;
+  @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=30) public String detailImageType3;
+  @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=36) public String detailImageVersion3;
+  public List<String> getDetailImageUrls(){return Arrays.asList(getDetailImageUrl(),detailImageVersion2==null?null:"/api/public/products/"+id+"/images/1?v="+detailImageVersion2,detailImageVersion3==null?null:"/api/public/products/"+id+"/images/2?v="+detailImageVersion3);}
+  public byte[] imageBytes(int position){return position==0?detailImage:position==1?detailImage2:detailImage3;}
+  public String imageMime(int position){return position==0?detailImageType:position==1?detailImageType2:detailImageType3;}
   public String getDetailImageUrl(){return detailImageVersion==null?null:"/api/public/products/"+id+"/image?v="+detailImageVersion;}
   public Long comboTicketId;
   public Integer comboBuyQuantity;

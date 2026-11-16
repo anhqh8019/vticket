@@ -33,13 +33,14 @@ function ProductDetailsModal({ product, date, holidays = [], close }) {
     if(!dialog.open)dialog.showModal();document.body.style.overflow="hidden";
     return ()=>{document.body.style.overflow=overflow;previous?.focus?.();};
   },[]);
-  const [imageFailed,setImageFailed]=useState(false);
+  const [imageFailed,setImageFailed]=useState([]);
+  const images=(product.detailImageUrls || [product.detailImageUrl]).filter(Boolean).filter(url=>!imageFailed.includes(url));
   const price=priceForDate(product,date,holidays);
   return <dialog ref={ref} className="product-detail-dialog" aria-labelledby="product-detail-title" onCancel={close} onClick={e=>{if(e.target===e.currentTarget){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)close();}}}>
     <button type="button" className="product-detail-close secondary" aria-label="Đóng chi tiết" autoFocus onClick={close}>×</button>
     <div className="product-detail-grid">
       <div className="product-detail-image">
-        {product.detailImageUrl&&!imageFailed ? <img src={product.detailImageUrl} alt={product.name} onError={()=>setImageFailed(true)} /> : <div className="product-detail-placeholder"><img src="/venusgiti-logo.svg" alt="Venusgiti" /><span>{product.name}</span></div>}
+        {images.length ? images.map((url,index)=><img key={url} src={url} alt={`${product.name} — ảnh ${index+1}`} onError={()=>setImageFailed(previous=>[...previous,url])} />) : <div className="product-detail-placeholder"><img src="/venusgiti-logo.svg" alt="Venusgiti" /><span>{product.name}</span></div>}
       </div>
       <div className="product-detail-copy">
         <span className="eyebrow">{product.kind==="COMBO"?"COMBO ƯU ĐÃI":"VÉ TRẢI NGHIỆM"}{product.child?" · TRẺ EM":""}</span>
@@ -2201,17 +2202,18 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
     ),
     [ids, I] = useState(product?.includedServiceIds || []);
   const [detailText,setDetailText]=useState(product?.detailContent || "");
-  const [imageData,setImageData]=useState(null);
+  const [imageData,setImageData]=useState([null,null,null]);
   const [imageReading,setImageReading]=useState(false);
-  const [imageInputKey,setImageInputKey]=useState(0);
+  const [imageInputKey,setImageInputKey]=useState([0,0,0]);
   const [imageError,setImageError]=useState("");
-  const imagePreview=imageData===null ? product?.detailImageUrl?.replace("/public/","/admin/") : imageData;
-  async function readDetailImage(e){
+  const storedImages=product?.detailImageUrls || [product?.detailImageUrl];
+  const imagePreviews=imageData.map((data,slot)=>data===null ? storedImages[slot]?.replace("/public/","/admin/") : data);
+  async function readDetailImage(e,slot){
     const input=e.currentTarget,file=input.files?.[0];if(!file)return;
     setImageError("");
     if(!["image/png","image/jpeg"].includes(file.type)||file.size>2097152){setImageError("Chọn ảnh PNG/JPG tối đa 2 MB.");input.value="";return;}
     setImageReading(true);
-    try{const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error());reader.readAsDataURL(file);});setImageData(data);}
+    try{const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error());reader.readAsDataURL(file);});setImageData(previous=>previous.map((old,index)=>index===slot?data:old));}
     catch{setImageError("Không đọc được ảnh. Vui lòng chọn lại.");}
     finally{setImageReading(false);}
   }
@@ -2227,7 +2229,7 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
           name: f.get("name"),
           description: f.get("description"),
           detailContent: kind !== "SERVICE" ? detailText : undefined,
-          detailImageData: kind !== "SERVICE" ? imageData : undefined,
+          detailImagesData: kind !== "SERVICE" ? imageData : undefined,
           price: Number(f.get("price")),
           childPrice: kind !== "SERVICE" && f.get("childPrice") !== "" ? Number(f.get("childPrice")) : null,
           childWeekendPrice: kind !== "SERVICE" && f.get("childWeekendPrice") !== "" ? Number(f.get("childWeekendPrice")) : null,
@@ -2404,8 +2406,11 @@ function ProductForm({ product, products, busy, close, save, catalogType }) {
         <h3>Nội dung popup “Xem chi tiết”</h3>
         <div className="two-col">
           <div>
-            <Field key={imageInputKey} label="Ảnh chi tiết (PNG/JPG, tối đa 2 MB)" type="file" accept="image/png,image/jpeg" disabled={busy||imageReading} onChange={readDetailImage} />
-            {imagePreview && <><img className="product-detail-preview" src={imagePreview} alt="Xem trước ảnh chi tiết" /><button type="button" className="secondary" disabled={busy||imageReading} onClick={()=>{setImageData("");setImageError("");setImageInputKey(k=>k+1);}}>Bỏ ảnh</button></>}
+            <p className="muted">Tối đa 3 ảnh, hiển thị từ trên xuống theo thứ tự 1–2–3.</p>
+            {[0,1,2].map(slot=><div className="product-detail-upload-slot" key={slot}>
+              <Field key={`${slot}-${imageInputKey[slot]}`} label={`Ảnh ${slot+1} (PNG/JPG, tối đa 2 MB)`} type="file" accept="image/png,image/jpeg" disabled={busy||imageReading} onChange={e=>readDetailImage(e,slot)} />
+              {imagePreviews[slot] && <><img className="product-detail-preview" src={imagePreviews[slot]} alt={`Xem trước ảnh chi tiết ${slot+1}`} /><button type="button" className="secondary" disabled={busy||imageReading} onClick={()=>{setImageData(previous=>previous.map((old,i)=>i===slot?"":old));setImageError("");setImageInputKey(previous=>previous.map((old,i)=>i===slot?old+1:old));}}>Bỏ ảnh {slot+1}</button></>}
+            </div>)}
             {imageReading && <p>Đang đọc ảnh…</p>}{imageError && <p className="alert" role="alert">{imageError}</p>}
           </div>
           <label className="field">Nội dung chi tiết
