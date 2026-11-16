@@ -23,7 +23,7 @@ public final class Domain {
   @Column(precision=18,scale=0) public BigDecimal childPrice;
   @Column(precision=18,scale=0) public BigDecimal childWeekendPrice;
   @Column(precision=18,scale=0) public BigDecimal childHolidayPrice;
-  @Column(length=12000) public String detailContent;
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.NVARCHAR) @Column(length=12000,columnDefinition="nvarchar") public String detailContent;
   @com.fasterxml.jackson.annotation.JsonIgnore @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.VARBINARY) @Column(length=2097152,columnDefinition="varbinary") public byte[] detailImage;
   @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=30) public String detailImageType;
   @com.fasterxml.jackson.annotation.JsonIgnore @Column(length=36) public String detailImageVersion;
