@@ -33,7 +33,7 @@ class ProductDetailsIntegrationTest {
    else {in=new ProductInput("COMBO-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(Locale.ROOT),"Combo mẫu","",kind,BigDecimal.valueOf(100),true,Set.of(),base.id,10,1,null,null,null,null,null,in.detailContent(),in.detailImageData());var result=mvc.perform(post("/api/admin/products").with(httpBasic("admin","demo-admin-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(in))).andExpect(status().isOk()).andReturn();var id=mapper.readTree(result.getResponse().getContentAsString()).get("id").asLong();assertNotNull(products.findById(id).orElseThrow().detailImage);}
   }
   mvc.perform(get("/api/public/products/"+base.id+"/image")).andExpect(status().isOk()).andExpect(content().contentType("image/png")).andExpect(content().bytes(image())).andExpect(header().string("X-Content-Type-Options","nosniff"));
-  mvc.perform(get("/api/public/products")).andExpect(status().isOk()).andExpect(jsonPath("$[0].detailImageUrl").isString()).andExpect(jsonPath("$[0].detailImage").doesNotExist());
+  mvc.perform(get("/api/public/products")).andExpect(status().isOk()).andExpect(jsonPath("$[?(@.id == "+base.id+")].detailImageUrl").value(org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.startsWith("/api/public/products/")))).andExpect(jsonPath("$[0].detailImage").doesNotExist());
  }
  @Test void omittedDetailFieldsPreserveExistingDataAndBlankImageRemovesIt()throws Exception{
   mvc.perform(put("/api/admin/products/"+base.id).with(httpBasic("admin","demo-admin-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(input(Kind.TICKET,"Nội dung nhiều dòng\nDòng hai",data(),true)))).andExpect(status().isOk());
