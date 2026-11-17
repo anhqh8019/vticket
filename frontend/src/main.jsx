@@ -463,7 +463,7 @@ function Shop({ counter, products, run, busy, placed }) {
                         <div className="price-with-day">
                           <b className="price">
                             {money(effectivePrice(p))}
-                            {p.kind === "COMBO" ? " / combo" : ""}
+                            {p.kind === "COMBO" ? " / combo" : " / vé"}
                           </b>
                           {calendarReady && <PriceDayBadge product={{...p,child:isChild(p)}} date={date} holidays={calendar.days} />}
                         </div>
