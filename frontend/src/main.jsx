@@ -45,7 +45,7 @@ function ProductDetailsModal({ product, date, holidays = [], close }) {
       <div className="product-detail-copy">
         <span className="eyebrow">{product.kind==="COMBO"?"COMBO ƯU ĐÃI":"VÉ TRẢI NGHIỆM"}{product.child?" · TRẺ EM":""}</span>
         <h2 id="product-detail-title">{product.name}</h2>
-        <div className="price-with-day"><b className="price">{money(price)}{product.kind==="COMBO"?" / vé mua":" / vé"}</b><PriceDayBadge product={product} date={date} holidays={holidays} /></div>
+        <div className="price-with-day"><b className="price">{money(price)}{product.kind==="COMBO"?" / combo":" / vé"}</b><PriceDayBadge product={product} date={date} holidays={holidays} /></div>
         <p className="muted">Ngày sử dụng: {date.split("-").reverse().join("/")}</p>
         {product.kind==="COMBO" && <p className="product-detail-combo">Mỗi nhóm mua {product.comboBuyQuantity} vé{product.comboGiftQuantity?`, tặng ${product.comboGiftQuantity} vé`:""}.</p>}
         <div className="product-detail-description">{product.detailContent?.trim() || product.description?.trim() || "Thông tin chi tiết đang được cập nhật. Vui lòng liên hệ quầy để được hỗ trợ."}</div>
@@ -463,7 +463,7 @@ function Shop({ counter, products, run, busy, placed }) {
                         <div className="price-with-day">
                           <b className="price">
                             {money(effectivePrice(p))}
-                            {p.kind === "COMBO" ? " / vé mua" : ""}
+                            {p.kind === "COMBO" ? " / combo" : ""}
                           </b>
                           {calendarReady && <PriceDayBadge product={{...p,child:isChild(p)}} date={date} holidays={calendar.days} />}
                         </div>
@@ -1323,7 +1323,7 @@ function Manage({ run, busy, refreshCatalog }) {
                       <td>{labels[p.kind]}</td>
                       <td>
                         {money(p.price)}
-                        {p.kind !== "SERVICE" && <><small>{p.kind === "COMBO" ? "/ vé mua · Ngày thường" : "/ vé · Ngày thường"}</small><small>Cuối tuần: {money(p.weekendPrice ?? p.price)}</small><small>Lễ Tết: {money(p.holidayPrice ?? p.price)}</small></>}
+                        {p.kind !== "SERVICE" && <><small>{p.kind === "COMBO" ? "/ combo · Ngày thường" : "/ vé · Ngày thường"}</small><small>Cuối tuần: {money(p.weekendPrice ?? p.price)}</small><small>Lễ Tết: {money(p.holidayPrice ?? p.price)}</small></>}
                       </td>
                       {tab === "combos" && (
                         <td>
