@@ -42,14 +42,14 @@ public class SmileSqlClient implements SmileGateway {
   try(var st=c.prepareStatement(sql)){st.setQueryTimeout(15);st.setString(1,code.barcode());if(!code.serialFromSeq())st.setString(2,code.serial());try(var rs=st.executeQuery()){if(!rs.next())return null;var row=new Existing(rs.getString(1),clean(rs.getString(2)),clean(rs.getString(3)),clean(rs.getString(4)),rs.getDate(5)==null?null:rs.getDate(5).toLocalDate(),rs.getDate(6)==null?null:rs.getDate(6).toLocalDate(),rs.getBoolean(7),rs.getBoolean(8),rs.getBoolean(9),rs.getBoolean(10),rs.getBoolean(11));if(rs.next())throw new IllegalStateException("Nhiều bản ghi Smile trùng BarCode/Serial; cần đối soát");return row;}}
  }
  private String clean(String value){return value==null?null:value.stripTrailing();}
- private void verify(Existing r,Batch b,Code c){if(!Objects.equals(r.barcode(),c.barcode())||!Objects.equals(r.serial(),c.serialFromSeq()?"VN"+r.seq():c.serial())||!Objects.equals(r.pkg(),b.pkgCode())||!Objects.equals(r.from(),b.fromDate())||!Objects.equals(r.until(),b.toDate())||r.weekday()!=b.weekday()||r.child()!=b.child()||r.cancelled()||r.lost()||r.disabled())throw new IllegalStateException("BarCode "+c.barcode()+" / Serial "+c.serial()+" đã có trên Smile nhưng thông tin hoặc trạng thái không khớp; không ghi đè");}
+ private void verify(Existing r,Batch b,Code c){if(!Objects.equals(r.barcode(),c.barcode())||!Objects.equals(r.serial(),c.serialFromSeq()?SmileGateway.serialForSeq(r.seq()):c.serial())||!Objects.equals(r.pkg(),b.pkgCode())||!Objects.equals(r.from(),b.fromDate())||!Objects.equals(r.until(),b.toDate())||r.weekday()!=b.weekday()||r.child()!=b.child()||r.cancelled()||r.lost()||r.disabled())throw new IllegalStateException("BarCode "+c.barcode()+" / Serial "+c.serial()+" đã có trên Smile nhưng thông tin hoặc trạng thái không khớp; không ghi đè");}
  private String temporarySerial(List<Column> columns){
   int length=columns.stream().filter(c->key(c.name()).equals("serial")).findFirst().orElseThrow().size();
-  if(length<8)throw new IllegalStateException("Cột Serial Smile cần tối thiểu 8 ký tự để cấp mã an toàn");
+  if(length<12)throw new IllegalStateException("Cột Serial Smile cần tối thiểu 12 ký tự để cấp mã an toàn");
   return "VP"+UUID.randomUUID().toString().replace("-","").substring(0,Math.min(30,length-2));
  }
  private void finishSerial(Connection c,List<Column> columns,Existing inserted)throws SQLException{
-  String serial="VN"+inserted.seq();int size=columns.stream().filter(col->key(col.name()).equals("serial")).findFirst().orElseThrow().size();
+  String serial=SmileGateway.serialForSeq(inserted.seq());int size=columns.stream().filter(col->key(col.name()).equals("serial")).findFirst().orElseThrow().size();
   if(serial.length()>size)throw new IllegalStateException("Seri VN+SeqNo vượt độ dài cột Serial Smile");
   try(var st=c.prepareStatement("UPDATE "+target()+" SET Serial=? WHERE SeqNo=? AND BarCode=? AND Serial=?")){
    st.setQueryTimeout(15);st.setString(1,serial);st.setString(2,inserted.seq());st.setString(3,inserted.barcode());st.setString(4,inserted.serial());

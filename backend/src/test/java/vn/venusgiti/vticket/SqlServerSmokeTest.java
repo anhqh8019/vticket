@@ -72,7 +72,7 @@ class SqlServerSmokeTest {
   var codes=List.of(new SmileGateway.Code("new-1","1131000001",null,true),new SmileGateway.Code("new-2","1131000002",null,true));
   var batch=new SmileGateway.Batch("NEW-RULE","HK",date,date.plusYears(1),false,false,codes);
   var first=client.sync(batch);assertEquals("22924",first.getFirst().seqNo());assertEquals(first,client.sync(batch));
-  try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement();var rs=st.executeQuery("SELECT SeqNo,Serial FROM smile_rule_ci.TicketOnsen")){int count=0;while(rs.next()){assertEquals("VN"+rs.getString(1),rs.getString(2));count++;}assertEquals(2,count);}
+  try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement();var rs=st.executeQuery("SELECT SeqNo,Serial FROM smile_rule_ci.TicketOnsen")){int count=0;while(rs.next()){assertEquals("VN"+String.format(java.util.Locale.ROOT,"%010d",rs.getLong(1)),rs.getString(2));count++;}assertEquals(2,count);}
   var conflicting=new SmileGateway.Batch("CONFLICT","OTHER",date,date.plusYears(1),false,false,List.of(new SmileGateway.Code("new-3","1131000003",null,true),codes.getFirst()));assertThrows(IllegalStateException.class,()->client.sync(conflicting));
   try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement()){try(var rs=st.executeQuery("SELECT COUNT(*) FROM smile_rule_ci.TicketOnsen")){rs.next();assertEquals(2,rs.getInt(1));}st.execute("UPDATE smile_rule_ci.TicketOnsen SET Serial='LEGACY' WHERE BarCode='1131000001'");}
   assertThrows(IllegalStateException.class,()->client.sync(batch));

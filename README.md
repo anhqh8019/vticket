@@ -284,12 +284,12 @@ backend, `.env` của Compose hoặc WinSW:
 <env name="TICKET_BARCODE_PREFIX" value="1131" />
 ```
 
-`Serial = VN + SeqNo thực tế do Smile cấp`, không thêm số 0: SeqNo 22924 →
-VN22924. Trước đồng bộ, Seri hiển thị “Chờ SeqNo Smile”. Mã mới luôn dùng ánh xạ
+`Serial = VN + SeqNo thực tế do Smile cấp`, đệm đủ 10 chữ số sau VN: SeqNo 22924 →
+VN0000022924. Trước đồng bộ, Seri hiển thị “Chờ SeqNo Smile”. Mã mới luôn dùng ánh xạ
 FIELD_NAMES. Khi Smile tắt, chỉ có barcode nội bộ; không giả lập SeqNo/Seri.
 
 Trong một transaction Smile: INSERT vé với Seri tạm duy nhất → lấy SeqNo do
-IDENTITY/DEFAULT cấp → hoàn tất Serial=VN+SeqNo **chỉ cho dòng vừa INSERT** →
+IDENTITY/DEFAULT cấp → hoàn tất Serial=VN+SeqNo (đệm 10 chữ số) **chỉ cho dòng vừa INSERT** →
 COMMIT. Tài khoản Smile cần SELECT/INSERT và UPDATE riêng cột Serial. Retry tìm
 theo barcode và kiểm tra thông tin; không ghi đè dòng đã tồn tại nếu không khớp.
 Không dùng MAX(SeqNo)+1, không sửa IDENTITY. Các lô/mã cũ và vé đã bán không tự
