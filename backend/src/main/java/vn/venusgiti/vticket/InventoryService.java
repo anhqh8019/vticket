@@ -11,8 +11,9 @@ import vn.venusgiti.vticket.Requests.*;
 
 @Service @Transactional
 public class InventoryService {
+ private final String barcodePrefix;
  private final Products products; private final TicketBatches batches; private final TicketStock stock; private final Tickets tickets; private final Audits audits; private final Clock clock; private final TicketIdentifierCounters counters;private final SmileProperties smile;private final SmileSyncQueue smileQueue;
- InventoryService(Products p,TicketBatches b,TicketStock s,Tickets t,Audits a,Clock c,TicketIdentifierCounters ids,SmileProperties sm,SmileSyncQueue queue){products=p;batches=b;stock=s;tickets=t;audits=a;clock=c;counters=ids;smile=sm;smileQueue=queue;}
+ InventoryService(Products p,TicketBatches b,TicketStock s,Tickets t,Audits a,Clock c,TicketIdentifierCounters ids,SmileProperties sm,SmileSyncQueue queue,@org.springframework.beans.factory.annotation.Value("${app.ticket-barcode-prefix:1131}") String barcodePrefix){if(!barcodePrefix.matches("[0-9]{1,20}"))throw new IllegalArgumentException("TICKET_BARCODE_PREFIX cần 1–20 chữ số");this.barcodePrefix=barcodePrefix;products=p;batches=b;stock=s;tickets=t;audits=a;clock=c;counters=ids;smile=sm;smileQueue=queue;}
  private void require(boolean c,String m){BookingService.require(c,m);}
  public void lockProducts(Collection<Long> ids){ids.stream().distinct().sorted().forEach(id->products.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy vé/dịch vụ")));}
  public void lockBooking(Booking b){var ids=new ArrayList<Long>();for(var l:b.lines){ids.add(l.productId);if(l.ticketProductId!=null)ids.add(l.ticketProductId);}lockProducts(ids);}
@@ -46,14 +47,14 @@ public class InventoryService {
   stock.flush();Audit a=new Audit();a.happenedAt=clock.instant();a.actor=actor;a.action="SMILE_BATCH_IMPORTED";a.target=b.code;audits.save(a);return b;
  }
  private void assignIdentifiers(StockCode code,TicketIdentifierCounter counter){
-  while(true){require(counter.nextValue<=999999999L,"Đã hết dải mã nội bộ. Liên hệ quản trị để mở dải mới.");long number=counter.nextValue++;String serial="VN"+String.format(Locale.ROOT,"%010d",number),barcode=Long.toString(1000000000L+number);
-   if(stock.existsBySmileSerial(serial)||stock.existsBySmileBarcode(barcode))continue;
-   code.smileSerial=serial;code.smileBarcode=barcode;return;
+  while(true){require(counter.nextValue<=999999999L,"Đã hết dải mã nội bộ. Liên hệ quản trị để mở dải mới.");long number=counter.nextValue++;String barcode=barcodePrefix+String.format(Locale.ROOT,"%06d",number);
+   if(stock.existsBySmileBarcode(barcode))continue;
+   code.smileSerial=null;code.smileSerialFromSeq=true;code.smileBarcode=barcode;return;
   }
  }
  public TicketBatch generateIdentifiers(String batchId,String actor){
   var b=batches.findById(batchId).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND));lockProducts(List.of(b.productId));require("VTICKET".equals(b.source),"Lô Smile phải dùng nguyên Seri / barcode nguồn, không tự sinh thay thế");var counter=counters.acquire();int count=0;
-  for(var code:stock.findByBatchIdOrderByCodeAsc(batchId)){require((code.smileSerial==null)==(code.smileBarcode==null),"Mã đang thiếu một phần Seri / barcode, cần kiểm tra dữ liệu");if(code.smileSerial==null){assignIdentifiers(code,counter);stock.saveAndFlush(code);tickets.fillIdentifiers(code.id,code.smileSerial,code.smileBarcode);count++;}}
+  for(var code:stock.findByBatchIdOrderByCodeAsc(batchId)){require(code.smileSerialFromSeq||(code.smileSerial==null)==(code.smileBarcode==null),"Mã đang thiếu một phần Seri / barcode, cần kiểm tra dữ liệu");if(code.smileSerial==null&&code.smileBarcode==null){assignIdentifiers(code,counter);stock.saveAndFlush(code);tickets.fillIdentifiers(code.id,code.smileSerial,code.smileBarcode);count++;}}
   Audit audit=new Audit();audit.happenedAt=clock.instant();audit.actor=actor;audit.action="BATCH_IDENTIFIERS_GENERATED";audit.target=b.code;audits.save(audit);return b;
  }
  public void reserve(Booking b){

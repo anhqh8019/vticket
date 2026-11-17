@@ -272,3 +272,26 @@ V13 giữ nguyên ảnh V12 ở vị trí đầu tiên và bổ sung hai vị tr
 hoặc bỏ riêng từng ảnh; sửa nội dung không làm mất ảnh đã lưu. Cập nhật backend
 và frontend, nâng `client_max_body_size` của Nginx lên **10m** rồi reload để lưu
 được cả ba ảnh dung lượng lớn trong một lần.
+
+### Quy tắc mã mới (V14)
+
+Mã sinh mới: `BarCode = TICKET_BARCODE_PREFIX + số tăng nội bộ`, mặc định prefix
+`1131`, phần số ít nhất 6 chữ số (ví dụ `1131000001`). Bộ đếm lưu trong CSDL,
+không reset khi đổi prefix hoặc khởi động lại. Cấu hình trong biến môi trường
+backend, `.env` của Compose hoặc WinSW:
+
+```xml
+<env name="TICKET_BARCODE_PREFIX" value="1131" />
+```
+
+`Serial = VN + SeqNo thực tế do Smile cấp`, không thêm số 0: SeqNo 22924 →
+VN22924. Trước đồng bộ, Seri hiển thị “Chờ SeqNo Smile”. Mã mới luôn dùng ánh xạ
+FIELD_NAMES. Khi Smile tắt, chỉ có barcode nội bộ; không giả lập SeqNo/Seri.
+
+Trong một transaction Smile: INSERT vé với Seri tạm duy nhất → lấy SeqNo do
+IDENTITY/DEFAULT cấp → hoàn tất Serial=VN+SeqNo **chỉ cho dòng vừa INSERT** →
+COMMIT. Tài khoản Smile cần SELECT/INSERT và UPDATE riêng cột Serial. Retry tìm
+theo barcode và kiểm tra thông tin; không ghi đè dòng đã tồn tại nếu không khớp.
+Không dùng MAX(SeqNo)+1, không sửa IDENTITY. Các lô/mã cũ và vé đã bán không tự
+đổi mã; lô import Smile giữ nguyên thông tin nguồn. Cập nhật backend/frontend,
+Flyway tự chạy V14 trên DB vticket, không chạy migration trên Smile.

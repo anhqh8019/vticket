@@ -44,6 +44,7 @@ management:
       exposure:
         include: health
 app:
+  ticket-barcode-prefix: ${TICKET_BARCODE_PREFIX:1131}
   admin-user: ${ADMIN_USER:admin}
   admin-password: ${ADMIN_PASSWORD:}
   staff-user: ${STAFF_USER:staff}

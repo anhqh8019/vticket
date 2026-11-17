@@ -4,7 +4,7 @@ import java.sql.*;
 import java.time.*;
 import java.util.*;
 
-/** Isolated Smile connection. No Flyway, DDL, UPDATE or DELETE is executed against Smile. */
+/** Isolated Smile connection. No Flyway, DDL or DELETE. Only a newly inserted row is finalized with Serial=VN+SeqNo. */
 @Service
 public class SmileSqlClient implements SmileGateway {
  private final SmileProperties props;private final Clock clock;
@@ -31,20 +31,33 @@ public class SmileSqlClient implements SmileGateway {
   try(var c=connection()){
    var cols=columns(c);validate(cols);c.setAutoCommit(false);c.setTransactionIsolation(Connection.TRANSACTION_SERIALIZABLE);
    try{List<Synced> result=new ArrayList<>();for(var code:batch.codes()){
-     var existing=find(c,code);if(existing==null){insert(c,cols,batch,code);existing=find(c,code);}if(existing==null)throw new IllegalStateException("Smile chưa trả lại mã vừa ghi");verify(existing,batch,code);result.add(new Synced(code.stockId(),existing.seq(),code.barcode()));
+     var existing=find(c,code);if(existing==null){insert(c,cols,batch,code);existing=find(c,code);if(code.serialFromSeq()&&existing!=null){finishSerial(c,cols,existing);existing=find(c,code);}}if(existing==null)throw new IllegalStateException("Smile chưa trả lại mã vừa ghi");verify(existing,batch,code);result.add(new Synced(code.stockId(),existing.seq(),code.barcode()));
     }c.commit();return result;
    }catch(Exception e){c.rollback();if(e instanceof SQLException sql)throw safe(sql);if(e instanceof RuntimeException runtime)throw runtime;throw new IllegalStateException("Không hoàn tất đồng bộ Smile");}
   }catch(SQLException e){throw safe(e);}
  }
  private record Existing(String seq,String barcode,String serial,String pkg,LocalDate from,LocalDate until,boolean weekday,boolean child,boolean cancelled,boolean lost,boolean disabled) {}
  private Existing find(Connection c,Code code)throws SQLException{
-  String sql="SELECT SeqNo,BarCode,Serial,PkgCode,FromDate,ToDate,IsWeekday,IsChild,IsCancel,IsLoss,Disabled FROM "+target()+" WITH (UPDLOCK,HOLDLOCK) WHERE BarCode=? OR Serial=?";
-  try(var st=c.prepareStatement(sql)){st.setQueryTimeout(15);st.setString(1,code.barcode());st.setString(2,code.serial());try(var rs=st.executeQuery()){if(!rs.next())return null;var row=new Existing(rs.getString(1),clean(rs.getString(2)),clean(rs.getString(3)),clean(rs.getString(4)),rs.getDate(5)==null?null:rs.getDate(5).toLocalDate(),rs.getDate(6)==null?null:rs.getDate(6).toLocalDate(),rs.getBoolean(7),rs.getBoolean(8),rs.getBoolean(9),rs.getBoolean(10),rs.getBoolean(11));if(rs.next())throw new IllegalStateException("Nhiều bản ghi Smile trùng BarCode/Serial; cần đối soát");return row;}}
+  String sql="SELECT SeqNo,BarCode,Serial,PkgCode,FromDate,ToDate,IsWeekday,IsChild,IsCancel,IsLoss,Disabled FROM "+target()+" WITH (UPDLOCK,HOLDLOCK) WHERE BarCode=?"+(code.serialFromSeq()?"":" OR Serial=?");
+  try(var st=c.prepareStatement(sql)){st.setQueryTimeout(15);st.setString(1,code.barcode());if(!code.serialFromSeq())st.setString(2,code.serial());try(var rs=st.executeQuery()){if(!rs.next())return null;var row=new Existing(rs.getString(1),clean(rs.getString(2)),clean(rs.getString(3)),clean(rs.getString(4)),rs.getDate(5)==null?null:rs.getDate(5).toLocalDate(),rs.getDate(6)==null?null:rs.getDate(6).toLocalDate(),rs.getBoolean(7),rs.getBoolean(8),rs.getBoolean(9),rs.getBoolean(10),rs.getBoolean(11));if(rs.next())throw new IllegalStateException("Nhiều bản ghi Smile trùng BarCode/Serial; cần đối soát");return row;}}
  }
  private String clean(String value){return value==null?null:value.stripTrailing();}
- private void verify(Existing r,Batch b,Code c){if(!Objects.equals(r.barcode(),c.barcode())||!Objects.equals(r.serial(),c.serial())||!Objects.equals(r.pkg(),b.pkgCode())||!Objects.equals(r.from(),b.fromDate())||!Objects.equals(r.until(),b.toDate())||r.weekday()!=b.weekday()||r.child()!=b.child()||r.cancelled()||r.lost()||r.disabled())throw new IllegalStateException("BarCode "+c.barcode()+" / Serial "+c.serial()+" đã có trên Smile nhưng thông tin hoặc trạng thái không khớp; không ghi đè");}
+ private void verify(Existing r,Batch b,Code c){if(!Objects.equals(r.barcode(),c.barcode())||!Objects.equals(r.serial(),c.serialFromSeq()?"VN"+r.seq():c.serial())||!Objects.equals(r.pkg(),b.pkgCode())||!Objects.equals(r.from(),b.fromDate())||!Objects.equals(r.until(),b.toDate())||r.weekday()!=b.weekday()||r.child()!=b.child()||r.cancelled()||r.lost()||r.disabled())throw new IllegalStateException("BarCode "+c.barcode()+" / Serial "+c.serial()+" đã có trên Smile nhưng thông tin hoặc trạng thái không khớp; không ghi đè");}
+ private String temporarySerial(List<Column> columns){
+  int length=columns.stream().filter(c->key(c.name()).equals("serial")).findFirst().orElseThrow().size();
+  if(length<8)throw new IllegalStateException("Cột Serial Smile cần tối thiểu 8 ký tự để cấp mã an toàn");
+  return "VP"+UUID.randomUUID().toString().replace("-","").substring(0,Math.min(30,length-2));
+ }
+ private void finishSerial(Connection c,List<Column> columns,Existing inserted)throws SQLException{
+  String serial="VN"+inserted.seq();int size=columns.stream().filter(col->key(col.name()).equals("serial")).findFirst().orElseThrow().size();
+  if(serial.length()>size)throw new IllegalStateException("Seri VN+SeqNo vượt độ dài cột Serial Smile");
+  try(var st=c.prepareStatement("UPDATE "+target()+" SET Serial=? WHERE SeqNo=? AND BarCode=? AND Serial=?")){
+   st.setQueryTimeout(15);st.setString(1,serial);st.setString(2,inserted.seq());st.setString(3,inserted.barcode());st.setString(4,inserted.serial());
+   if(st.executeUpdate()!=1)throw new IllegalStateException("Không hoàn tất Seri cho bản ghi Smile vừa tạo");
+  }
+ }
  private void insert(Connection c,List<Column> columns,Batch b,Code code)throws SQLException{
-  var values=new LinkedHashMap<String,Object>();values.put("barcode",code.barcode());values.put("serial",code.serial());values.put("pkgcode",b.pkgCode());values.put("fromdate",Timestamp.valueOf(b.fromDate().atStartOfDay()));values.put("todate",Timestamp.valueOf(b.toDate().atStartOfDay()));values.put("isweekday",b.weekday());values.put("ischild",b.child());values.put("iscancel",false);values.put("isloss",false);values.put("disabled",false);var now=Timestamp.valueOf(LocalDateTime.ofInstant(clock.instant(),ZoneId.of("Asia/Ho_Chi_Minh")));values.put("createtime",now);values.put("lastchangetime",now);values.put("note","VTICKET "+b.code());values.put("hotelid",null);if(!SmileProperties.blank(props.clerkId())){values.put("createclerkid",props.clerkId());values.put("lastchangeclerkid",props.clerkId());}
+  var values=new LinkedHashMap<String,Object>();values.put("barcode",code.barcode());values.put("serial",code.serialFromSeq()?temporarySerial(columns):code.serial());values.put("pkgcode",b.pkgCode());values.put("fromdate",Timestamp.valueOf(b.fromDate().atStartOfDay()));values.put("todate",Timestamp.valueOf(b.toDate().atStartOfDay()));values.put("isweekday",b.weekday());values.put("ischild",b.child());values.put("iscancel",false);values.put("isloss",false);values.put("disabled",false);var now=Timestamp.valueOf(LocalDateTime.ofInstant(clock.instant(),ZoneId.of("Asia/Ho_Chi_Minh")));values.put("createtime",now);values.put("lastchangetime",now);values.put("note","VTICKET "+b.code());values.put("hotelid",null);if(!SmileProperties.blank(props.clerkId())){values.put("createclerkid",props.clerkId());values.put("lastchangeclerkid",props.clerkId());}
   List<String> names=new ArrayList<>();List<Object> args=new ArrayList<>();for(var col:columns){String k=key(col.name());if(col.identity()||!values.containsKey(k))continue;Object value=values.get(k);if(value instanceof String str&&col.type().toLowerCase(Locale.ROOT).contains("char")&&str.length()>col.size()){if(k.equals("note"))value=str.substring(0,col.size());else throw new IllegalStateException("Dữ liệu vượt độ dài cột Smile: "+col.name());}names.add("["+col.name()+"]");args.add(value);}
   String sql="INSERT INTO "+target()+" ("+String.join(",",names)+") VALUES ("+String.join(",",Collections.nCopies(args.size(),"?"))+")";try(var st=c.prepareStatement(sql)){st.setQueryTimeout(15);for(int i=0;i<args.size();i++)st.setObject(i+1,args.get(i));st.executeUpdate();}
  }

@@ -62,6 +62,22 @@ class SqlServerSmokeTest {
   try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement();var rs=st.executeQuery("SELECT COUNT(*) FROM smile_ci.TicketOnsen WHERE HotelID IS NULL")){assertTrue(rs.next());assertEquals(2,rs.getInt(1));}
   try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement()){st.execute("UPDATE smile_ci.TicketOnsen SET IsCancel=1 WHERE BarCode='1000000001'");}assertThrows(IllegalStateException.class,()->client.sync(batch));
  }
+ @Test void smileUsesActualIdentityForSerialAndRetriesWithoutChangingOldRows()throws Exception{
+  String url=System.getenv("SQLSERVER_TEST_URL"),password=System.getenv("SQLSERVER_TEST_PASSWORD");
+  try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement()){
+   st.execute("IF SCHEMA_ID('smile_rule_ci') IS NULL EXEC('CREATE SCHEMA smile_rule_ci')");
+   st.execute("CREATE TABLE smile_rule_ci.TicketOnsen(SeqNo BIGINT IDENTITY(22924,1) PRIMARY KEY,BarCode VARCHAR(30) NOT NULL UNIQUE,Serial VARCHAR(30) NOT NULL UNIQUE,PkgCode VARCHAR(64) NOT NULL,FromDate DATETIME NOT NULL,ToDate DATETIME NOT NULL,IsWeekday BIT,IsChild BIT,IsCancel BIT,IsLoss BIT,Disabled BIT)");
+  }
+  var client=new SmileSqlClient(new SmileProperties(true,url,"sa",password,"smile_rule_ci","TicketOnsen",null,null,"FIELD_NAMES",false),Clock.systemUTC());var date=LocalDate.now();
+  var codes=List.of(new SmileGateway.Code("new-1","1131000001",null,true),new SmileGateway.Code("new-2","1131000002",null,true));
+  var batch=new SmileGateway.Batch("NEW-RULE","HK",date,date.plusYears(1),false,false,codes);
+  var first=client.sync(batch);assertEquals("22924",first.getFirst().seqNo());assertEquals(first,client.sync(batch));
+  try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement();var rs=st.executeQuery("SELECT SeqNo,Serial FROM smile_rule_ci.TicketOnsen")){int count=0;while(rs.next()){assertEquals("VN"+rs.getString(1),rs.getString(2));count++;}assertEquals(2,count);}
+  var conflicting=new SmileGateway.Batch("CONFLICT","OTHER",date,date.plusYears(1),false,false,List.of(new SmileGateway.Code("new-3","1131000003",null,true),codes.getFirst()));assertThrows(IllegalStateException.class,()->client.sync(conflicting));
+  try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement()){try(var rs=st.executeQuery("SELECT COUNT(*) FROM smile_rule_ci.TicketOnsen")){rs.next();assertEquals(2,rs.getInt(1));}st.execute("UPDATE smile_rule_ci.TicketOnsen SET Serial='LEGACY' WHERE BarCode='1131000001'");}
+  assertThrows(IllegalStateException.class,()->client.sync(batch));
+  try(var c=java.sql.DriverManager.getConnection(url,"sa",password);var st=c.createStatement();var rs=st.executeQuery("SELECT Serial FROM smile_rule_ci.TicketOnsen WHERE BarCode='1131000001'")){rs.next();assertEquals("LEGACY",rs.getString(1));}
+ }
  @Autowired TicketEmailJobs emailJobs;
  @Test void emailOutboxPersistsAndQueriesOnSqlServer(){
   var j=new TicketEmailJob();j.bookingId="ci-legacy-order";j.recipient="qa@example.test";j.state="PENDING";j.createdAt=Instant.now();j.nextAttemptAt=j.createdAt.minusSeconds(1);emailJobs.saveAndFlush(j);

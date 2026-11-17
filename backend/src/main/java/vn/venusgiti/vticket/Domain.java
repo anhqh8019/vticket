@@ -143,6 +143,7 @@ public final class Domain {
  }
  @Entity(name="StockCode") @Table(name="ticket_stock")
  public static class StockCode {
+  @Column(nullable=false) public boolean smileSerialFromSeq;
   @Id @Column(length=36) public String id;
   @Column(nullable=false,length=36) public String batchId;
   @Column(nullable=false) public Long productId;

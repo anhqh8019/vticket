@@ -2130,7 +2130,7 @@ function BatchManager({ products, run, busy }) {
                       <code>{c.smileSeqNo || "—"}</code>
                     </td>
                     <td>
-                      <code>{c.smileSerial || "—"}</code>
+                      <code>{c.smileSerial || (c.smileSerialFromSeq ? "Chờ SeqNo Smile" : "—")}</code>
                     </td>
                     <td>
                       <code>{c.smileBarcode || "—"}</code>
