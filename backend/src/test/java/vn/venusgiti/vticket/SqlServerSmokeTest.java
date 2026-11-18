@@ -32,7 +32,7 @@ class SqlServerSmokeTest {
   var date=LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));inventory.createBatch(new BatchInput("MONTH-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(Locale.ROOT),p.id,3,date,date.plusYears(1)),"admin");
   monthly.save(MonthlyDomain.Tier.GOLD,new MonthlyService.PlanInput(p.id,BigDecimal.valueOf(100),BigDecimal.valueOf(150),true),"admin");
   var dates=new ArrayList<LocalDate>();dates.add(date);if(date.plusDays(1).getMonth()==date.getMonth())dates.add(date.plusDays(1));
-  if(dates.stream().noneMatch(d->d.getDayOfWeek().getValue()>=6))dates.add(date.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY)));
+  for(var d:new ArrayList<>(dates))if(d.getDayOfWeek().getValue()<6){var weekend=d.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY));if(!dates.contains(weekend))dates.add(weekend);}
   var b=monthly.sell(new MonthlyService.SaleInput(MonthlyDomain.Tier.GOLD,"Khách SQL tháng","0901234567","",dates),"staff");service.cash(b.id,"staff");assertTrue(pdf.generate(b.accessToken).length>1000);
   var in=new MonthlyService.RedeemInput(monthly.view(b.id).qrToken(),true,false);var first=monthly.redeem(in,"staff");assertEquals(1,first.tickets().size());assertEquals(first.accessToken(),monthly.redeem(in,"staff").accessToken());assertTrue(pdf.generate(first.accessToken()).length>1000);service.checkIn(first.tickets().getFirst().qrToken,"staff");
  }

@@ -35,3 +35,16 @@ test("one pass allows at most 30 dates and adding a month preserves earlier choi
  assert.match(selectionError("GOLD",january),/30/);
  assert.equal(selectionError("GOLD",january.slice(0,30)),"");
 });
+
+test("every selected Monday-Sunday week needs a weekend, including cross-month and cross-year weeks",async()=>{
+ const {selectionError,missingWeekendWeeks}=await import("./monthly-pricing.js");
+ for(const tier of ["GOLD","PLATINUM"]){
+  assert.match(selectionError(tier,["2027-01-04","2027-01-09","2027-01-11"]),/11\/01\/2027/);
+  assert.equal(selectionError(tier,["2027-01-04","2027-01-09","2027-01-11","2027-01-17"]),"");
+  assert.match(selectionError(tier,["2027-01-30","2027-02-01"]),/01\/02\/2027/);
+  assert.equal(selectionError(tier,["2027-12-27","2028-01-01"]),"");
+  assert.match(selectionError(tier,["2027-12-27","2028-01-01","2028-01-03"]),/03\/01\/2028/);
+  assert.equal(selectionError(tier,["2027-01-09","2027-01-24"]),"");
+ }
+ assert.deepEqual(missingWeekendWeeks(["2027-01-10","2027-01-11"]),["2027-01-11"]);
+});

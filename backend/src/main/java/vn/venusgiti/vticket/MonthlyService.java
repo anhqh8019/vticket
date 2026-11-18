@@ -48,7 +48,12 @@ public class MonthlyService {
   var base=ticket(p.ticketProductId);
   var dates=new TreeSet<>(in.dates());require(dates.size()==in.dates().size(),"Ngày sử dụng không được trùng");require(!dates.first().isBefore(today()),"Không chọn ngày sử dụng đã qua");require(dates.size()<=30,"Tối đa 30 ngày trong một thẻ; hết ngày đăng ký vui lòng mua thẻ mới");
   require(p.tier!=Tier.SILVER||dates.size()>=12,"Silver cần chọn tối thiểu 12 ngày thường");
-  require(p.tier==Tier.SILVER||dates.stream().anyMatch(d->d.getDayOfWeek()==DayOfWeek.SATURDAY||d.getDayOfWeek()==DayOfWeek.SUNDAY),"Gold và Platinum cần ít nhất 1 ngày thứ Bảy hoặc Chủ nhật");
+  if(p.tier!=Tier.SILVER){
+   var weeks=new TreeSet<LocalDate>();var weekendWeeks=new HashSet<LocalDate>();
+   for(var d:dates){var monday=d.with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));weeks.add(monday);if(d.getDayOfWeek()==DayOfWeek.SATURDAY||d.getDayOfWeek()==DayOfWeek.SUNDAY)weekendWeeks.add(monday);}
+   weeks.removeAll(weekendWeeks);
+   require(weeks.isEmpty(),"Gold và Platinum cần ít nhất 1 ngày thứ Bảy hoặc Chủ nhật được chọn trong mỗi tuần có ngày đăng ký (tuần từ thứ Hai đến Chủ nhật). Tuần còn thiếu bắt đầu: "+weeks);
+  }
   var b=booking(in.holderName(),phone,in.email(),dates.first(),actor);var pass=new Pass();pass.bookingId=b.id;pass.qrToken=UUID.randomUUID().toString();pass.tier=p.tier;pass.ticketProductId=base.id;pass.ticketName=base.name;pass.mealName=p.tier==Tier.PLATINUM?"Phiếu ăn vật lý":null;pass.holderName=b.customerName;pass.createdAt=clock.instant();
   for(var date:dates){var d=new Day();d.dayType=pricing.dayType(date);require(p.tier!=Tier.SILVER||d.dayType.equals("WEEKDAY"),"Silver chỉ sử dụng ngày thường, không gồm thứ Bảy, Chủ nhật và lễ Tết");d.price=d.dayType.equals("WEEKDAY")?p.weekdayPrice:p.weekendPrice;pass.days.put(date,d);b.subtotal=b.subtotal.add(d.price);}
   b.total=b.subtotal;var line=new BookingLine();line.productId=base.id;line.name="Vé tháng "+p.tier+" · "+dates.size()+" ngày";line.kind=Kind.SERVICE;line.quantity=1;line.unitPrice=b.total;line.ticketQuantity=0;line.includedServices="Mỗi ngày đã chọn: 1 vé "+base.name+(p.tier==Tier.PLATINUM?" + 1 phiếu ăn vật lý":"");b.lines.add(line);

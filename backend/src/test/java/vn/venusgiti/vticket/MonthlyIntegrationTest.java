@@ -36,7 +36,7 @@ class MonthlyIntegrationTest {
  Booking sale(Tier tier,String...dates){
   var chosen=new TreeSet<>(Arrays.stream(dates).map(LocalDate::parse).toList());
   if(tier==Tier.SILVER){for(var d=LocalDate.of(2027,1,4);chosen.size()<12;d=d.plusDays(1))if(d.getDayOfWeek().getValue()<=5)chosen.add(d);}
-  else if(chosen.stream().noneMatch(d->d.getDayOfWeek().getValue()>=6))chosen.add(LocalDate.of(2027,1,9));
+  else for(var d:new ArrayList<>(chosen))if(d.getDayOfWeek().getValue()<6)chosen.add(d.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY)));
   return rawSale(tier,chosen.stream().map(LocalDate::toString).toArray(String[]::new));
  }
  MonthlyService.RedeemInput redeemInput(Booking b){return new MonthlyService.RedeemInput(passes.findById(b.id).orElseThrow().qrToken,true,true);}
@@ -94,7 +94,7 @@ class MonthlyIntegrationTest {
     assertTrue(text.contains("0901234567"));assertTrue(text.contains("tháng 1 - 2027"));assertFalse(text.contains("VTicket"));assertFalse(text.contains("vật lý mỗi lần đến"));
     if(tier==Tier.PLATINUM)assertTrue(text.contains("+ 01 phiếu ăn"));else assertFalse(text.contains("phiếu ăn"));
     var image=new org.apache.pdfbox.rendering.PDFRenderer(doc).renderImageWithDPI(0,100);colors.add(image.getRGB(5,5));
-    var qrCrop=image.getSubimage((int)(115*100.0/72),(int)((doc.getPage(0).getMediaBox().getHeight()-440)*100.0/72),(int)(190*100.0/72),(int)(190*100.0/72));
+    var qrCrop=image.getSubimage((int)(360*100.0/72),(int)((doc.getPage(0).getMediaBox().getHeight()-805)*100.0/72),(int)(160*100.0/72),(int)(160*100.0/72));
     var bitmap=new com.google.zxing.BinaryBitmap(new com.google.zxing.common.HybridBinarizer(new com.google.zxing.client.j2se.BufferedImageLuminanceSource(qrCrop)));
     assertEquals(monthly.view(b.id).qrToken(),new com.google.zxing.MultiFormatReader().decode(bitmap).getText());
    }
@@ -119,22 +119,41 @@ class MonthlyIntegrationTest {
   assertThrows(ResponseStatusException.class,()->monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",dates),"staff"));
   var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
   mvc.perform(post("/api/staff/monthly/orders").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",dates)))).andExpect(status().isBadRequest());
-  var b=monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",dates.subList(0,30)),"staff");assertEquals(30,monthly.view(b.id).days().size());
+  var thirty=new ArrayList<>(dates.subList(0,28));thirty.add(LocalDate.of(2027,2,6));thirty.add(LocalDate.of(2027,2,7));
+  var b=monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",thirty),"staff");assertEquals(30,monthly.view(b.id).days().size());
  }
  @Test void minimumDaysWeekendAndCrossMonthCrossYearPricing()throws Exception{
   assertThrows(ResponseStatusException.class,()->rawSale(Tier.SILVER,"2027-01-04"));
   for(var tier:List.of(Tier.GOLD,Tier.PLATINUM)){
    assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-01-04","2027-01-05"));
    assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-11-24")); // Weekday holiday is not a Saturday/Sunday.
-   var b=rawSale(tier,"2027-01-30","2027-02-01","2028-01-01");assertEquals(0,b.total.compareTo(BigDecimal.valueOf(400)));
-   service.cash(b.id,"staff");assertEquals(3,monthly.view(b.id).days().size());
+   var b=rawSale(tier,"2027-01-30","2027-02-01","2027-02-06","2028-01-01");assertEquals(0,b.total.compareTo(BigDecimal.valueOf(550)));
+   service.cash(b.id,"staff");assertEquals(4,monthly.view(b.id).days().size());
    try(var document=org.apache.pdfbox.Loader.loadPDF(pdf.generate(b.accessToken))){
-    assertTrue(document.getNumberOfPages()>=2);var text=new org.apache.pdfbox.text.PDFTextStripper().getText(document);
-    for(var date:List.of("30/01/2027","01/02/2027","01/01/2028"))assertTrue(text.contains(date));
+    assertEquals(1,document.getNumberOfPages());var text=new org.apache.pdfbox.text.PDFTextStripper().getText(document);
+    for(var date:List.of("tháng 1 - 2027: 30","tháng 2 - 2027: 01, 06","tháng 1 - 2028: 01"))assertTrue(text.contains(date));
    }
   }
   var silver=rawSale(Tier.SILVER,"2027-01-25","2027-01-26","2027-01-27","2027-01-28","2027-01-29","2027-02-01","2027-02-02","2027-02-03","2027-02-04","2027-02-05","2027-02-11","2027-02-12");
   assertEquals(0,silver.total.compareTo(BigDecimal.valueOf(1200)));assertEquals(12,monthly.view(silver.id).days().size());
+ }
+ @Test void eachSelectedWeekNeedsItsOwnWeekendIncludingMonthAndYearBoundaries(){
+  for(var tier:List.of(Tier.GOLD,Tier.PLATINUM)){
+   assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-01-04","2027-01-09","2027-01-11"));
+   assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-01-30","2027-02-01"));
+   assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-12-27","2028-01-01","2028-01-03"));
+   assertNotNull(rawSale(tier,"2027-01-04","2027-01-09","2027-01-11","2027-01-17"));
+   assertNotNull(rawSale(tier,"2027-12-27","2028-01-01","2028-01-03","2028-01-08"));
+   assertNotNull(rawSale(tier,"2027-01-09","2027-01-24")); // Empty intervening weeks do not require visits.
+  }
+ }
+ @Test void thirtyMonthRowsStillFitOnePageWithoutMissingAnyMonth()throws Exception{
+  var dates=java.util.stream.IntStream.range(0,30).mapToObj(i->LocalDate.of(2027,2,1).plusMonths(i).with(java.time.temporal.TemporalAdjusters.firstInMonth(DayOfWeek.SATURDAY))).toList();
+  var b=monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",dates),"staff");service.cash(b.id,"staff");
+  try(var doc=org.apache.pdfbox.Loader.loadPDF(pdf.generate(b.accessToken))){
+   assertEquals(1,doc.getNumberOfPages());var text=new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
+   for(var d:dates)assertTrue(text.contains("tháng "+d.getMonthValue()+" - "+d.getYear()+": "+String.format(Locale.ROOT,"%02d",d.getDayOfMonth())));
+  }
  }
  @Test void httpSecurityValidationAndPaidMonthlyDetail()throws Exception{
   mvc.perform(get("/api/staff/monthly/plans")).andExpect(status().isUnauthorized());

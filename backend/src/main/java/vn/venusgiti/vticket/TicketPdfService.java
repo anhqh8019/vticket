@@ -40,7 +40,9 @@ public class TicketPdfService {
  private byte[] renderMonthly(PaidTickets paid) throws IOException {
   var pass=paid.monthlyPass();
   try(var document=new PDDocument();var fontStream=new ClassPathResource("fonts/VenusgitiSans.ttf").getInputStream();var output=new ByteArrayOutputStream()){
-   var font=PDType0Font.load(document,fontStream,true);var page=new PDPage(PDRectangle.A5);document.addPage(page);
+   var font=PDType0Font.load(document,fontStream,true);
+   // A4 fits up to 30 month rows without truncation or an additional schedule page.
+   var page=new PDPage(PDRectangle.A4);document.addPage(page);
    try(var c=new PDPageContentStream(document,page)){
     Color background=switch(pass.tier()){
      case SILVER -> new Color(240,242,245);
@@ -48,37 +50,27 @@ public class TicketPdfService {
      case PLATINUM -> new Color(232,239,248);
     };
     c.setNonStrokingColor(background);c.addRect(0,0,page.getMediaBox().getWidth(),page.getMediaBox().getHeight());c.fill();
-    text(c,font,23,24,550,"VENUSGITI",new Color(35,89,75));
-    text(c,font,17,24,520,"THẺ THÁNG · "+pass.tier(),Color.DARK_GRAY);
-    wrap(c,font,pass.holderName(),13,24,493,370,2);
-    text(c,font,11,24,452,paid.order().phone==null?"":paid.order().phone,Color.DARK_GRAY);
+    text(c,font,23,24,796,"VENUSGITI",new Color(35,89,75));
+    text(c,font,17,24,765,"THẺ THÁNG · "+pass.tier(),Color.DARK_GRAY);
+    wrap(c,font,pass.holderName(),13,24,736,315,2);
+    text(c,font,11,24,695,paid.order().phone==null?"":paid.order().phone,Color.DARK_GRAY);
     var matrix=new MultiFormatWriter().encode(pass.qrToken(),BarcodeFormat.QR_CODE,600,600,Map.of(EncodeHintType.MARGIN,4));
-    c.drawImage(LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix)),120,255,180,180);
-    wrap(c,font,"Vé: "+pass.ticketName()+(pass.mealName()==null?"":" + 01 phiếu ăn"),11,24,238,370,2);
-    var month=java.time.YearMonth.from(pass.days().getFirst().date());
-    boolean multiMonth=!month.equals(java.time.YearMonth.from(pass.days().getLast().date()));
-    if(multiMonth)wrap(c,font,"Ngày đăng ký: "+pass.days().getFirst().date().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))+" đến "+pass.days().getLast().date().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))+" · "+pass.days().size()+" ngày. Lịch chi tiết ở trang sau.",11,24,193,370,3);
-    else wrap(c,font,"Ngày đăng ký: "+pass.days().stream().map(d->String.format(Locale.ROOT,"%02d",d.date().getDayOfMonth())).reduce((a,b)->a+", "+b).orElse("")+" · tháng "+month.getMonthValue()+" - "+month.getYear(),11,24,193,370,3);
-    text(c,font,10,24,130,"Mỗi ngày đăng ký nhận tối đa 1 lượt vé tại quầy.",Color.DARK_GRAY);
-    text(c,font,10,24,110,"Đưa QR thẻ này cho nhân viên để nhận vé lượt.",Color.DARK_GRAY);
-    text(c,font,10,24,90,"QR thẻ tháng không dùng trực tiếp tại cổng Smile.",Color.DARK_GRAY);
-    text(c,font,9,24,60,"Mã đơn: "+paid.order().id,Color.DARK_GRAY);
-   }
-   if(!java.time.YearMonth.from(pass.days().getFirst().date()).equals(java.time.YearMonth.from(pass.days().getLast().date()))){
-    // List full dates so a day in a different month/year can never be mistaken for another.
-    for(int offset=0;offset<pass.days().size();offset+=28){
-     var schedule=new PDPage(PDRectangle.A5);document.addPage(schedule);
-     try(var c=new PDPageContentStream(document,schedule)){
-      text(c,font,17,24,550,"LỊCH SỬ DỤNG · "+pass.tier(),Color.DARK_GRAY);
-      wrap(c,font,pass.holderName()+" · "+paid.order().phone,11,24,526,370,1);
-      int end=Math.min(offset+28,pass.days().size());
-      for(int i=offset;i<end;i++){
-       var d=pass.days().get(i);String type=d.dayType().equals("HOLIDAY")?"Lễ Tết":d.dayType().equals("WEEKEND")?"Cuối tuần":"Ngày thường";
-       text(c,font,11,24,495-(i-offset)*16,d.date().format(java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy"))+" · "+type,Color.DARK_GRAY);
-      }
-      text(c,font,8,24,25,"Mã đơn: "+paid.order().id,Color.DARK_GRAY);
-     }
+    c.drawImage(LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix)),365,650,150,150);
+    wrap(c,font,"Vé: "+pass.ticketName()+(pass.mealName()==null?"":" + 01 phiếu ăn"),12,24,620,547,2);
+    text(c,font,12,24,575,"Ngày đăng ký ("+pass.days().size()+" ngày):",Color.DARK_GRAY);
+    var groups=new TreeMap<java.time.YearMonth,List<String>>();
+    for(var d:pass.days())groups.computeIfAbsent(java.time.YearMonth.from(d.date()),key->new ArrayList<>()).add(String.format(Locale.ROOT,"%02d",d.date().getDayOfMonth()));
+    int row=0;
+    for(var group:groups.entrySet()){
+     var month=group.getKey();String line="tháng "+month.getMonthValue()+" - "+month.getYear()+": "+String.join(", ",group.getValue());
+     float width=font.getStringWidth(clean(font,line))/1000;
+     float size=Math.min(11,547/Math.max(1,width));
+     text(c,font,size,24,550-row++*14,line,Color.DARK_GRAY);
     }
+    text(c,font,10,24,105,"Mỗi ngày đăng ký nhận tối đa 1 lượt vé tại quầy.",Color.DARK_GRAY);
+    text(c,font,10,24,85,"Đưa QR thẻ này cho nhân viên để nhận vé lượt.",Color.DARK_GRAY);
+    text(c,font,10,24,65,"QR thẻ tháng không dùng trực tiếp tại cổng Smile.",Color.DARK_GRAY);
+    text(c,font,9,24,35,"Mã đơn: "+paid.order().id,Color.DARK_GRAY);
    }
    document.getDocumentInformation().setTitle("Thẻ tháng Venusgiti");document.save(output);return output.toByteArray();
   }catch(WriterException e){throw new IOException("Không tạo được QR thẻ tháng",e);}
