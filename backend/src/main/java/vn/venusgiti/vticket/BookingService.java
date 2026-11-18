@@ -11,9 +11,10 @@ import vn.venusgiti.vticket.Requests.*;
 
 @Service @Transactional
 public class BookingService {
+ private final MonthlyService monthly;
  private final ComboPricing pricing;
  private final Products products; private final Vouchers vouchers; private final Bookings bookings; private final Tickets tickets; private final Audits audits; private final Clock clock; private final InventoryService inventory; private final TicketEmailQueue ticketEmails;
- BookingService(Products p,Vouchers v,Bookings b,Tickets t,Audits a,Clock c,InventoryService i,TicketEmailQueue emailQueue,ComboPricing pricing){this.pricing=pricing;products=p;vouchers=v;bookings=b;tickets=t;audits=a;clock=c;inventory=i;ticketEmails=emailQueue;}
+ BookingService(Products p,Vouchers v,Bookings b,Tickets t,Audits a,Clock c,InventoryService i,TicketEmailQueue emailQueue,ComboPricing pricing,MonthlyService monthly){this.monthly=monthly;this.pricing=pricing;products=p;vouchers=v;bookings=b;tickets=t;audits=a;clock=c;inventory=i;ticketEmails=emailQueue;}
  static void require(boolean condition,String message){ if(!condition)throw new ResponseStatusException(HttpStatus.CONFLICT,message); }
  static String phone(String value){return value==null?"":value.strip().replaceAll("[ -]","").replaceFirst("^\\+84","0");}
  private Instant now(){return clock.instant();}
@@ -79,5 +80,6 @@ public class BookingService {
  public Booking cash(String id,String actor){var b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));require(b.channel==Channel.COUNTER,"Chỉ xác nhận tiền mặt cho đơn tại quầy");require(!"VIETQR".equals(b.paymentMethod),"Đơn đã chọn VietQR. Hủy đơn và tạo lại nếu cần đổi sang tiền mặt.");return pay(id,"CASH","CASH-"+id,actor);}
  public Booking cancel(String id,String actor,boolean expired){Booking b=bookings.lockId(id).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Không tìm thấy đơn"));if(expired&&b.status!=Status.PENDING)return b;require(b.status==Status.PENDING,"Chỉ hủy đơn chưa thanh toán");inventory.lockBooking(b);inventory.release(b);if(b.voucherCode!=null){Voucher v=vouchers.lockCode(b.voucherCode).orElseThrow();if(b.id.equals(v.reservedOrderId)){v.reservedOrderId=null;v.reservedUntil=null;}}b.status=expired?Status.EXPIRED:Status.CANCELLED;audit(actor,expired?"ORDER_EXPIRED":"ORDER_CANCELLED",id);return b;}
  public Ticket checkIn(String token,String actor){Ticket t=tickets.lockTokenOrCode(token.trim(),token.trim().toUpperCase(Locale.ROOT)).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"Mã vé không hợp lệ"));require(t.checkedInAt==null,"Vé đã được sử dụng");require(t.visitDate.equals(LocalDate.now(clock.withZone(ZoneId.of("Asia/Ho_Chi_Minh")))) ,"Vé chỉ sử dụng đúng ngày đã đặt");require(bookings.findById(t.bookingId).orElseThrow().status==Status.PAID,"Đơn chưa thanh toán");inventory.used(t);t.checkedInAt=now();t.checkedInBy=actor;audit(actor,"CHECK_IN",t.id);return t;}
+ public MonthlyService.View monthlyView(String id){return monthly.view(id);}
  public List<Ticket> ticketList(String bookingId){return tickets.findByBookingId(bookingId);}
 }

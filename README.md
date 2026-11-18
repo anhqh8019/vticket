@@ -295,3 +295,23 @@ theo barcode và kiểm tra thông tin; không ghi đè dòng đã tồn tại n
 Không dùng MAX(SeqNo)+1, không sửa IDENTITY. Các lô/mã cũ và vé đã bán không tự
 đổi mã; lô import Smile giữ nguyên thông tin nguồn. Cập nhật backend/frontend,
 Flyway tự chạy V14 trên DB vticket, không chạy migration trên Smile.
+
+
+### Vé tháng (Silver / Gold / Platinum)
+
+- Chỉ bán tại quầy: menu **Vé tháng**. Admin vào **Thiết lập 3 hạng vé**, chọn vé gốc và giá một ngày thường / cuối tuần. Lễ Tết dùng lịch hàng năm và giá cuối tuần.
+- Silver chỉ chọn T2–T6 không phải ngày lễ; Gold và Platinum được chọn cả cuối tuần/lễ. Platinum cần một **loại vé ăn riêng** (kind TICKET, khác vé vào cổng), có lô mã và đồng bộ Smile như vé thường.
+- Chọn một hoặc nhiều ngày trong **cùng một tháng**, không chọn ngày đã qua. Tổng tiền = tổng đơn giá của ngày đã chọn; đây là giá từng ngày, không phải giá trọn tháng cố định. Được mua trước cho tháng sau. Không tự động thêm ngày, gia hạn hay chuyển lượt dư.
+- Đơn dùng luồng CASH/VietQR hiện có; chỉ sau PAID mới có QR/PDF thẻ, gửi email nếu đã bật SMTP và có email. Giá, hạng, ngày, loại vé/ăn được chốt tại lúc tạo đơn, sửa gói không thay đổi thẻ cũ.
+- Máy quét QR dạng bàn phím: **Quét thẻ & cấp vé lượt**, quét rồi Enter. Nhân viên đối chiếu họ tên, xác nhận để cấp. Không có nhận diện khuôn mặt/CCCD tự động. Thẻ tháng không dùng trực tiếp tại Smile.
+- Mỗi thẻ được cấp đúng một lượt/ngày đã chọn. Lấy vé trong lô đang bán, còn hạn ngày đến, đủ điều kiện đồng bộ Smile; Platinum lấy thêm một vé ăn. Cấp và ghi lượt trong cùng transaction; thiếu vé/ăn thì rollback tất cả. Quét lại trả đơn/vé lượt cũ, kể cả đã dùng tại cổng, không cấp thêm. Khóa thẻ cùng ràng buộc DB ngăn hai quầy cấp trùng.
+- Kho chỉ được trừ **khi đến nhận vé**, không giữ sẵn mã cho mọi ngày khi bán thẻ tháng. Vận hành cần chuẩn bị đủ kho cho khách thẻ tháng. Ngày đã cấp được ghi là **đã cấp**, không suy diễn khách đã qua cổng Smile; việc đọc lịch sử cổng là luồng riêng.
+- V15 tạo bảng monthly_plans, monthly_passes, monthly_pass_days trong DB VTicket; không đổi bảng/cổng Smile. Tiền doanh thu nằm trên đơn mua thẻ; đơn cấp lượt có tổng 0 và payment_method=MONTHLY_PASS để không cộng doanh thu hai lần.
+
+Kiểm thử triển khai vé tháng:
+1. Admin cấu hình đủ 3 hạng và tạo/mở bán lô vé vào cổng, vé ăn. Staff không được sửa cấu hình.
+2. Silver chặn T7/CN/lễ; Gold/Platinum cho chọn; ngày lễ dùng giá cuối tuần. Chọn nhiều ngày cùng tháng, kiểm tra tổng tiền; chặn ngày quá khứ/trùng/khác tháng.
+3. Đơn chờ thanh toán không có QR và không cấp lượt. Test CASH, VietQR callback, tải PDF và email sau thanh toán; callback lặp không cấp thêm thẻ/vé.
+4. Quét thẻ đúng ngày → nhận vé mới. Quét lại, F5, hai quầy cùng cấp → cùng một đơn/vé. Thẻ chưa thanh toán, ngoài lịch hoặc hết hạn bị chặn.
+5. Platinum thiếu vé ăn → không mất vé vào cổng/lượt. Bổ sung kho rồi cấp → đúng 1 vé vào cổng + 1 vé ăn. Ngày tiếp theo → mã khác.
+6. In PDF vé lượt, thử qua cổng Smile thật và bộ phận nhận vé ăn. Kiểm tra vé dùng một lần; QR thẻ tháng chỉ tra cứu/cấp tại quầy.

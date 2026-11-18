@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { api, login, money, today, labels } from "./api";
 import { rememberStaffPage, restoredStaffPage, forgetStaffPage } from "./auth-navigation.js";
 import "./style.css";
+import Monthly, { MonthlyCard } from "./monthly.jsx";
 function Field({ label, ...props }) {
   return (
     <label className="field">
@@ -152,6 +153,7 @@ function App() {
           {user ? (
             <>
               <button onClick={() => go("counter")}>Bán tại quầy</button>
+              <button onClick={() => go("monthly")}>Vé tháng</button>
               <button onClick={() => go("checkin")}>Kiểm soát vé</button>
               <button onClick={() => go("orders")}>Đơn hàng</button>
               {admin && <button onClick={() => go("manage")}>Quản trị</button>}
@@ -247,6 +249,7 @@ function App() {
             }
           />
         )}
+        {page === "monthly" && user && <Monthly products={products} admin={admin} run={run} busy={busy} open={open} />}
         {page === "checkin" && user && <CheckIn run={run} busy={busy} />}
         {page === "orders" && user && (
           <Orders run={run} busy={busy} open={open} />
@@ -680,6 +683,7 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
               Cập nhật trạng thái
             </button>
           </section>
+          {d.monthlyPass && <MonthlyCard pass={d.monthlyPass} token={b.accessToken} busy={busy} run={run} />}
           {tickets.length > 0 && (
             <>
               <h2>Vé điện tử ({tickets.length})</h2>

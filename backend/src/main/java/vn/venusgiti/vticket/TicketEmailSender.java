@@ -45,6 +45,11 @@ public class TicketEmailSender {
                     +"Tải PDF gộp: "+root+"/tickets.pdf\nTải ZIP các vé riêng: "+root+"/tickets.zip\n\n"
                     +"Mỗi vé dùng một lần, đúng ngày ghi trên vé. Quét tại hệ thống Venusgiti Onsen.\n"
                     +"Đường dẫn tải vé là riêng tư. Chỉ chuyển vé cho đúng người sử dụng và không chia sẻ công khai.\n\nCảm ơn bạn đã lựa chọn Venusgiti!";
+            if(paid.monthlyPass()!=null)body="Xin chào "+order.customerName+",\n\nVenusgiti đã xác nhận thanh toán thẻ tháng "+paid.monthlyPass().tier()+".\n"
+                    +"Số ngày đăng ký: "+paid.monthlyPass().days().size()+"\n"
+                    +"Thẻ QR và lịch sử dụng được đính kèm. Tải lại: "+root+"/tickets.pdf\n\n"
+                    +"Mỗi ngày đã đăng ký, vui lòng đưa QR thẻ tháng tại quầy để nhận vé lượt. QR thẻ tháng không dùng trực tiếp tại cổng Smile.\n"
+                    +"Không chia sẻ QR hoặc đường dẫn tải thẻ công khai.\n\nCảm ơn bạn đã lựa chọn Venusgiti!";
             var message=sender.createMimeMessage();var helper=new MimeMessageHelper(message,attach,"UTF-8");
             helper.setFrom(props.from());helper.setTo(claim.recipient());helper.setSubject("Venusgiti - Vé điện tử đơn "+shortId);
             helper.setText(body,false);

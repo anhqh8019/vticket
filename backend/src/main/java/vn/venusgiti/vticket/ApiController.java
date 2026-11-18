@@ -25,8 +25,8 @@ public class ApiController {
  @GetMapping("/public/config") public Map<String,Object> config(){return Map.of("brand","Venusgiti","vietqrEnabled",vietqr.ready(),"vietqrEnvironment",vietqr.client().baseUrl().contains("dev.vietqr.org")?"sandbox":"production");}
  @GetMapping("/public/products") public List<Product> catalog(){return products.findByActiveTrueOrderByIdAsc();}
  @PostMapping("/public/orders") public Booking order(@Valid @RequestBody OrderInput in){return service.create(in,Channel.ONLINE,"guest");}
- @GetMapping("/public/orders/{token}") public OrderDetails detail(@PathVariable String token){var b=service.getPublic(token);return new OrderDetails(b,service.ticketList(b.id),payments.view(b.id),ticketEmails.view(b.id));}
- public record OrderDetails(Booking order,List<Ticket> tickets,VietQrPaymentService.View payment,TicketEmailQueue.View emailDelivery) {}
+ @GetMapping("/public/orders/{token}") public OrderDetails detail(@PathVariable String token){var b=service.getPublic(token);return new OrderDetails(b,service.ticketList(b.id),payments.view(b.id),ticketEmails.view(b.id),service.monthlyView(b.id));}
+ public record OrderDetails(Booking order,List<Ticket> tickets,VietQrPaymentService.View payment,TicketEmailQueue.View emailDelivery,MonthlyService.View monthlyPass) {}
  @PostMapping("/public/orders/{token}/cancel") public Booking cancel(@PathVariable String token){return service.cancel(service.getPublic(token).id,"guest",false);}
  @GetMapping(value="/public/qr/{qrToken}",produces=MediaType.IMAGE_PNG_VALUE) public byte[] qr(@PathVariable String qrToken) throws Exception {try{UUID.fromString(qrToken);}catch(IllegalArgumentException e){throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Mã QR không hợp lệ");}var matrix=new MultiFormatWriter().encode(qrToken,BarcodeFormat.QR_CODE,260,260);var out=new ByteArrayOutputStream();MatrixToImageWriter.writeToStream(matrix,"PNG",out);return out.toByteArray();}
  @GetMapping("/staff/orders") public List<Booking> orders(){return bookings.findTop200ByOrderByCreatedAtDesc();}

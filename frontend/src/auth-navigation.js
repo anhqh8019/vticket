@@ -1,6 +1,6 @@
 // Remember navigation only, never credentials or authentication state.
 const key = "vticket-staff-page";
-const pages = new Set(["orders", "counter", "checkin", "manage"]);
+const pages = new Set(["orders", "counter", "checkin", "manage", "monthly"]);
 export function rememberStaffPage(page, storage) {
   if (!pages.has(page)) return;
   try { (storage ?? globalThis.sessionStorage)?.setItem(key, page); } catch { /* Storage may be disabled. */ }

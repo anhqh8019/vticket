@@ -19,15 +19,16 @@ import vn.venusgiti.vticket.Domain.*;
 public class TicketPdfService {
  private final BookingService bookings;
  TicketPdfService(BookingService b){bookings=b;}
- public record PaidTickets(Booking order,List<Ticket> tickets) {}
+ public record PaidTickets(Booking order,List<Ticket> tickets,MonthlyService.View monthlyPass) {}
  public PaidTickets prepare(String accessToken){
   Booking b=bookings.getPublic(accessToken);BookingService.require(b.status==Status.PAID,"Chỉ tải vé khi đơn đã thanh toán");
-  var tickets=bookings.ticketList(b.id).stream().sorted(Comparator.comparing((Ticket t)->t.ticketCode==null?t.id:t.ticketCode).thenComparing(t->t.id)).toList();BookingService.require(!tickets.isEmpty(),"Đơn chưa có vé được cấp");return new PaidTickets(b,tickets);
+  var tickets=bookings.ticketList(b.id).stream().sorted(Comparator.comparing((Ticket t)->t.ticketCode==null?t.id:t.ticketCode).thenComparing(t->t.id)).toList();var monthly=bookings.monthlyView(b.id);BookingService.require(!tickets.isEmpty()||monthly!=null,"Đơn chưa có vé được cấp");return new PaidTickets(b,tickets,monthly);
  }
- public byte[] generate(String accessToken) throws IOException {var paid=prepare(accessToken);return render(paid.order(),paid.tickets());}
+ public byte[] generate(String accessToken) throws IOException {var paid=prepare(accessToken);return paid.monthlyPass()!=null?renderMonthly(paid):render(paid.order(),paid.tickets());}
  /** Generate one PDF at a time directly into the response; never hold the entire archive in memory. */
  public void writeZip(PaidTickets paid,OutputStream output) throws IOException {
   try(var zip=new java.util.zip.ZipOutputStream(output,java.nio.charset.StandardCharsets.UTF_8)){
+   if(paid.monthlyPass()!=null){zip.putNextEntry(new java.util.zip.ZipEntry("Venusgiti-monthly-pass.pdf"));zip.write(renderMonthly(paid));zip.closeEntry();zip.finish();return;}
    int index=0;for(var ticket:paid.tickets()){
     String serial=ticket.smileSerial==null?ticket.id:ticket.smileSerial;serial=serial.replaceAll("[^A-Za-z0-9_-]","_");serial=serial.substring(0,Math.min(serial.length(),64));
     String name=String.format(Locale.ROOT,"%04d-Venusgiti-%s.pdf",++index,serial);
@@ -35,6 +36,26 @@ public class TicketPdfService {
    }
    zip.finish();
   }
+ }
+ private byte[] renderMonthly(PaidTickets paid) throws IOException {
+  var pass=paid.monthlyPass();
+  try(var document=new PDDocument();var fontStream=new ClassPathResource("fonts/VenusgitiSans.ttf").getInputStream();var output=new ByteArrayOutputStream()){
+   var font=PDType0Font.load(document,fontStream,true);var page=new PDPage(PDRectangle.A5);document.addPage(page);
+   try(var c=new PDPageContentStream(document,page)){
+    text(c,font,23,24,550,"VENUSGITI",new Color(35,89,75));
+    text(c,font,17,24,520,"THẺ THÁNG · "+pass.tier(),Color.DARK_GRAY);
+    wrap(c,font,pass.holderName(),13,24,493,370,2);
+    var matrix=new MultiFormatWriter().encode(pass.qrToken(),BarcodeFormat.QR_CODE,600,600,Map.of(EncodeHintType.MARGIN,4));
+    c.drawImage(LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix)),120,285,180,180);
+    wrap(c,font,"Vé: "+pass.ticketName()+(pass.mealName()==null?"":" + 1 vé ăn/lần: "+pass.mealName()),11,24,266,370,3);
+    wrap(c,font,"Ngày đăng ký: "+pass.days().stream().map(d->String.format(Locale.ROOT,"%02d",d.date().getDayOfMonth())).reduce((a,b)->a+", "+b).orElse("")+" · tháng "+java.time.YearMonth.from(pass.days().getFirst().date()),11,24,208,370,3);
+    text(c,font,10,24,150,"Mỗi ngày đăng ký nhận tối đa 1 lượt vé tại quầy.",Color.DARK_GRAY);
+    text(c,font,10,24,130,"Đưa QR thẻ này cho nhân viên VTicket để nhận vé lượt.",Color.DARK_GRAY);
+    text(c,font,10,24,110,"QR thẻ tháng không dùng trực tiếp tại cổng Smile.",Color.DARK_GRAY);
+    text(c,font,9,24,80,"Mã đơn: "+paid.order().id,Color.DARK_GRAY);
+   }
+   document.getDocumentInformation().setTitle("Thẻ tháng Venusgiti");document.save(output);return output.toByteArray();
+  }catch(WriterException e){throw new IOException("Không tạo được QR thẻ tháng",e);}
  }
  private byte[] render(Booking b,List<Ticket> tickets) throws IOException {
   try(var document=new PDDocument();var fontStream=new ClassPathResource("fonts/VenusgitiSans.ttf").getInputStream();var output=new ByteArrayOutputStream()){

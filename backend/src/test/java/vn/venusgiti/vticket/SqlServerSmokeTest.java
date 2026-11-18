@@ -26,6 +26,16 @@ class SqlServerSmokeTest {
  @Autowired Tickets tickets; @Autowired InventoryService inventory; @Autowired TicketPdfService pdf; @Autowired Products products;@Autowired Vouchers vouchers;@Autowired BookingService service;
  @Test void migrateAndSellWithSingleUseVoucher() throws Exception {assertNull(tickets.findById("ci-old-1").orElseThrow().stockId);assertNull(tickets.findById("ci-old-2").orElseThrow().stockId);Product p=new Product();p.code="CI-"+UUID.randomUUID();p.name="Vé kiểm thử SQL Server";p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(250000);products.saveAndFlush(p);var date=LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));inventory.createBatch(new BatchInput("CI-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(Locale.ROOT),p.id,5,date,date.plusYears(1)),"test");Voucher v=new Voucher();v.code="CI-"+UUID.randomUUID().toString().toUpperCase(Locale.ROOT);v.customerName="Khách CI";v.phone="0900000000";v.percentage=10;v.validFrom=Instant.now().minusSeconds(60);v.validUntil=Instant.now().plusSeconds(3600);vouchers.saveAndFlush(v);var b=service.create(new OrderInput("Khách CI","0900000000","",LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh")),v.code,List.of(new LineInput(p.id,2))),Channel.COUNTER,"staff");assertEquals(0,BigDecimal.valueOf(450000).compareTo(b.total));service.cash(b.id,"staff");var t=service.ticketList(b.id);assertEquals(2,t.size());assertNotNull(t.get(0).ticketCode);assertTrue(pdf.generate(b.accessToken).length>1000);service.checkIn(t.get(0).qrToken,"staff");assertThrows(org.springframework.web.server.ResponseStatusException.class,()->service.checkIn(t.get(0).qrToken,"staff"));assertEquals(b.id,vouchers.findById(v.id).orElseThrow().usedOrderId);}
 
+ @Autowired MonthlyService monthly;
+ @Test void monthlySqlServerSelectedDatesAndIdempotentIssuance()throws Exception{
+  var p=new Product();p.code="MONTH-"+UUID.randomUUID().toString().substring(0,20);p.name="Vé tháng SQL";p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(100);products.saveAndFlush(p);
+  var date=LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));inventory.createBatch(new BatchInput("MONTH-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(Locale.ROOT),p.id,3,date,date.plusYears(1)),"admin");
+  monthly.save(MonthlyDomain.Tier.GOLD,new MonthlyService.PlanInput(p.id,null,BigDecimal.valueOf(100),BigDecimal.valueOf(150),true),"admin");
+  var dates=new ArrayList<LocalDate>();dates.add(date);if(date.plusDays(1).getMonth()==date.getMonth())dates.add(date.plusDays(1));
+  var b=monthly.sell(new MonthlyService.SaleInput(MonthlyDomain.Tier.GOLD,"Khách SQL tháng",null,"",dates),"staff");service.cash(b.id,"staff");assertTrue(pdf.generate(b.accessToken).length>1000);
+  var in=new MonthlyService.RedeemInput(monthly.view(b.id).qrToken(),true);var first=monthly.redeem(in,"staff");assertEquals(1,first.tickets().size());assertEquals(first.accessToken(),monthly.redeem(in,"staff").accessToken());
+ }
+
  @Autowired PaymentIntents paymentIntents; @Autowired VietQrPaymentService payments;
  @Test void bankCallbackMigratesAndIssuesOnce() throws Exception {
   Product p=new Product();p.code="BANK-"+UUID.randomUUID().toString().substring(0,20);p.name="Vé VietQR SQL Server";p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(100000);products.saveAndFlush(p);
