@@ -20,10 +20,10 @@ public class MonthlyService {
  private final ComboPricing pricing; private final Audits audits; private final Clock clock;
  MonthlyService(MonthlyPlans plans,MonthlyPasses passes,Products products,Bookings bookings,Tickets tickets,InventoryService inventory,ComboPricing pricing,Audits audits,Clock clock){this.plans=plans;this.passes=passes;this.products=products;this.bookings=bookings;this.tickets=tickets;this.inventory=inventory;this.pricing=pricing;this.audits=audits;this.clock=clock;}
  public record PlanInput(@NotNull Long ticketProductId,@NotNull @DecimalMin("0") @DecimalMax("1000000000") @Digits(integer=10,fraction=0) BigDecimal weekdayPrice,@NotNull @DecimalMin("0") @DecimalMax("1000000000") @Digits(integer=10,fraction=0) BigDecimal weekendPrice,@NotNull Boolean active) {}
- public record SaleInput(@NotNull Tier tier,@NotBlank @Size(max=150) String holderName,@Size(max=20) @Pattern(regexp="^$|^\\+?[0-9 ()-]{8,20}$") String phone,@Email @Size(max=254) String email,@NotEmpty @Size(max=31) List<@NotNull LocalDate> dates) {}
+ public record SaleInput(@NotNull Tier tier,@NotBlank @Size(max=150) String holderName,@NotBlank @Size(max=20) @Pattern(regexp="^\\+?[0-9 ()-]{8,20}$") String phone,@Email @Size(max=254) String email,@NotEmpty @Size(max=31) List<@NotNull LocalDate> dates) {}
  public record RedeemInput(@NotBlank @Size(max=36) String qrToken,@NotNull Boolean holderConfirmed,Boolean physicalMealConfirmed) {}
  public record DayView(LocalDate date,String dayType,BigDecimal price,String issuedBookingId,Instant issuedAt,boolean physicalMealIssued) {}
- public record View(String bookingId,Tier tier,String holderName,String ticketName,String mealName,String qrToken,String status,List<DayView> days,int remaining) {}
+ public record View(String bookingId,Tier tier,String holderName,String phone,String ticketName,String mealName,String qrToken,String status,List<DayView> days,int remaining) {}
  public record VisitInfo(Tier tier,boolean physicalMealIssued) {}
  public VisitInfo visit(String bookingId){var b=bookings.findById(bookingId).orElseThrow();if(!"MONTHLY_PASS".equals(b.paymentMethod))return null;var p=passes.findById(b.paymentReference).orElseThrow();return new VisitInfo(p.tier,p.tier==Tier.PLATINUM);}
  public record Issued(String accessToken,List<Ticket> tickets,boolean alreadyIssued) {}
@@ -39,13 +39,15 @@ public class MonthlyService {
  }
  private Booking booking(String holder,String phone,String email,LocalDate date,String actor){var b=new Booking();b.id=UUID.randomUUID().toString();b.accessToken=UUID.randomUUID().toString();b.customerName=holder.strip();b.phone=BookingService.phone(phone);b.email=email==null||email.isBlank()?null:email.strip();b.visitDate=date;b.channel=Channel.COUNTER;b.status=Status.PENDING;b.createdAt=clock.instant();b.expiresAt=b.createdAt.plusSeconds(900);b.soldBy=actor;b.subtotal=BigDecimal.ZERO;b.discount=BigDecimal.ZERO;b.total=BigDecimal.ZERO;return b;}
  public Booking sell(SaleInput in,String actor){
+  String phone=in.phone()==null?"":in.phone().strip().replaceAll("[ ()-]","");
+  require(phone.matches("\\+?[0-9]{8,15}"),"Vé tháng bắt buộc có số điện thoại hợp lệ");
   var p=plans.findById(in.tier()).orElseThrow(MonthlyService::missing);require(p.active,"Gói vé tháng đã ngừng bán");
   var ids=new ArrayList<Long>();ids.add(p.ticketProductId);inventory.lockProducts(ids);
   // Re-read after the product lock: plan edits use the same lock ordering.
   p=plans.lockTier(in.tier()).orElseThrow(MonthlyService::missing);entityManager.refresh(p);require(p.active&&ids.contains(p.ticketProductId),"Cấu hình gói vừa thay đổi, vui lòng tạo lại");
   var base=ticket(p.ticketProductId);
   var dates=new TreeSet<>(in.dates());require(dates.size()==in.dates().size(),"Ngày sử dụng không được trùng");require(!dates.first().isBefore(today()),"Không chọn ngày sử dụng đã qua");require(YearMonth.from(dates.first()).equals(YearMonth.from(dates.last())),"Chọn các ngày trong cùng một tháng");
-  var b=booking(in.holderName(),in.phone(),in.email(),dates.first(),actor);var pass=new Pass();pass.bookingId=b.id;pass.qrToken=UUID.randomUUID().toString();pass.tier=p.tier;pass.ticketProductId=base.id;pass.ticketName=base.name;pass.mealName=p.tier==Tier.PLATINUM?"Phiếu ăn vật lý":null;pass.holderName=b.customerName;pass.createdAt=clock.instant();
+  var b=booking(in.holderName(),phone,in.email(),dates.first(),actor);var pass=new Pass();pass.bookingId=b.id;pass.qrToken=UUID.randomUUID().toString();pass.tier=p.tier;pass.ticketProductId=base.id;pass.ticketName=base.name;pass.mealName=p.tier==Tier.PLATINUM?"Phiếu ăn vật lý":null;pass.holderName=b.customerName;pass.createdAt=clock.instant();
   for(var date:dates){var d=new Day();d.dayType=pricing.dayType(date);require(p.tier!=Tier.SILVER||d.dayType.equals("WEEKDAY"),"Silver chỉ sử dụng ngày thường, không gồm thứ Bảy, Chủ nhật và lễ Tết");d.price=d.dayType.equals("WEEKDAY")?p.weekdayPrice:p.weekendPrice;pass.days.put(date,d);b.subtotal=b.subtotal.add(d.price);}
   b.total=b.subtotal;var line=new BookingLine();line.productId=base.id;line.name="Vé tháng "+p.tier+" · "+dates.size()+" ngày";line.kind=Kind.SERVICE;line.quantity=1;line.unitPrice=b.total;line.ticketQuantity=0;line.includedServices="Mỗi ngày đã chọn: 1 vé "+base.name+(p.tier==Tier.PLATINUM?" + 1 phiếu ăn vật lý":"");b.lines.add(line);
   bookings.saveAndFlush(b);passes.save(pass);audit(actor,"MONTHLY_PASS_CREATED",b.id);return b;
@@ -54,7 +56,7 @@ public class MonthlyService {
  private View view(Pass p,Booking b){
   int remaining=(int)p.days.entrySet().stream().filter(e->!e.getKey().isBefore(today())&&e.getValue().issuedBookingId==null).count();
   String state=b.status!=Status.PAID?b.status.name():p.days.keySet().stream().allMatch(d->d.isBefore(today()))?"EXPIRED":remaining==0?"EXHAUSTED":p.days.keySet().stream().allMatch(d->d.isAfter(today()))?"SCHEDULED":"ACTIVE";
-  return new View(p.bookingId,p.tier,p.holderName,p.ticketName,p.mealName,b.status==Status.PAID?p.qrToken:null,state,p.days.entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e->new DayView(e.getKey(),e.getValue().dayType,e.getValue().price,e.getValue().issuedBookingId,e.getValue().issuedAt,p.tier==Tier.PLATINUM&&e.getValue().issuedBookingId!=null)).toList(),remaining);
+  return new View(p.bookingId,p.tier,p.holderName,b.phone,p.ticketName,p.mealName,b.status==Status.PAID?p.qrToken:null,state,p.days.entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e->new DayView(e.getKey(),e.getValue().dayType,e.getValue().price,e.getValue().issuedBookingId,e.getValue().issuedAt,p.tier==Tier.PLATINUM&&e.getValue().issuedBookingId!=null)).toList(),remaining);
  }
  public List<View> list(){return passes.findTop200ByOrderByCreatedAtDesc().stream().map(p->view(p,bookings.findById(p.bookingId).orElseThrow())).toList();}
  public View lookup(String token){var pass=passes.findByQrToken(token).orElseThrow(MonthlyService::missing);return view(pass,bookings.findById(pass.bookingId).orElseThrow());}

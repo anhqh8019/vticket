@@ -315,3 +315,5 @@ Kiểm thử triển khai vé tháng:
 4. Quét thẻ đúng ngày → nhận vé mới. Quét lại, F5, hai quầy cùng cấp → cùng một đơn/vé. Thẻ chưa thanh toán, ngoài lịch hoặc hết hạn bị chặn.
 5. Platinum yêu cầu xác nhận phát phiếu ăn vật lý → đúng 1 vé vào cổng, ghi nhận đã phát phiếu ăn. Quét lại không phát thêm phiếu. Thiếu vé vào cổng → không mất lượt/không ghi đã phát phiếu.
 6. In PDF vé lượt, thử qua cổng Smile thật và đối chiếu quy trình phát phiếu ăn vật lý. Kiểm tra vé dùng một lần; QR thẻ tháng chỉ tra cứu/cấp tại quầy.
+
+Thẻ tháng bắt buộc số điện thoại khi mua (vé lượt thông thường vẫn giữ quy định cũ). Số điện thoại hiển thị dưới tên trên thẻ/PDF. Màu thẻ: Silver xám bạc, Gold vàng nhạt, Platinum xanh nhạt.

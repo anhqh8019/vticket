@@ -31,7 +31,7 @@ class MonthlyIntegrationTest {
  Product product(String name){var p=new Product();p.code="M-"+UUID.randomUUID();p.name=name;p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(999);return products.saveAndFlush(p);}
  void batch(Product p,int quantity){inventory.createBatch(new BatchInput("M-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(Locale.ROOT),p.id,quantity,LocalDate.of(2027,1,1),LocalDate.of(2027,12,31)),"admin");}
  void plan(Tier tier){monthly.save(tier,new MonthlyService.PlanInput(base.id,BigDecimal.valueOf(100),BigDecimal.valueOf(150),true),"admin");}
- Booking sale(Tier tier,String...dates){return monthly.sell(new MonthlyService.SaleInput(tier,"Khách tháng",null,"",Arrays.stream(dates).map(LocalDate::parse).toList()),"staff");}
+ Booking sale(Tier tier,String...dates){return monthly.sell(new MonthlyService.SaleInput(tier,"Khách tháng","0901234567","",Arrays.stream(dates).map(LocalDate::parse).toList()),"staff");}
  MonthlyService.RedeemInput redeemInput(Booking b){return new MonthlyService.RedeemInput(passes.findById(b.id).orElseThrow().qrToken,true,true);}
  @BeforeEach void setup(){clock.instant=Instant.parse("2027-01-04T03:00:00Z");base=product("Vé tắm");meal=product("Vé ăn");batch(base,20);for(var t:Tier.values())plan(t);}
  @Test void pricesDatesAndPaymentGateWithPdf()throws Exception{
@@ -67,6 +67,32 @@ class MonthlyIntegrationTest {
   var start=new CountDownLatch(1);var pool=Executors.newFixedThreadPool(2);try{
    Callable<MonthlyService.Issued> task=()->{start.await();return monthly.redeem(redeemInput(b),"staff");};var a=pool.submit(task);var c=pool.submit(task);start.countDown();var one=a.get(15,TimeUnit.SECONDS);var two=c.get(15,TimeUnit.SECONDS);assertEquals(one.accessToken(),two.accessToken());assertEquals("Vé tắm",one.tickets().getFirst().productName);assertEquals(0,bookings.findById(b.id).orElseThrow().total.compareTo(BigDecimal.valueOf(100)));
   }finally{pool.shutdownNow();}
+ }
+ @Test void monthlyPhoneIsRequiredAtSaleAndDisplayedOnCard()throws Exception{
+  for(String phone:new String[]{null,"","   ","12 -- ()"}){
+   assertThrows(ResponseStatusException.class,()->monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách",phone,"",List.of(LocalDate.of(2027,1,4))),"staff"));
+   String value=phone==null?"null":"\""+phone+"\"";
+   mvc.perform(post("/api/staff/monthly/orders").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"tier\":\"GOLD\",\"holderName\":\"Test\",\"phone\":"+value+",\"dates\":[\"2027-01-04\"]}"))
+    .andExpect(status().is4xxClientError());
+  }
+  var b=monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","+84 (901) 234-567","",List.of(LocalDate.of(2027,1,4))),"staff");
+  assertEquals("0901234567",monthly.view(b.id).phone());
+ }
+ @Test void monthlyPdfHasPhoneCorrectMonthBenefitsAndDistinctBackgrounds()throws Exception{
+  var colors=new HashSet<Integer>();
+  for(var tier:Tier.values()){
+   var b=sale(tier,"2027-01-04");service.cash(b.id,"staff");
+   try(var doc=org.apache.pdfbox.Loader.loadPDF(pdf.generate(b.accessToken))){
+    var text=new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
+    assertTrue(text.contains("0901234567"));assertTrue(text.contains("tháng 1 - 2027"));assertFalse(text.contains("VTicket"));assertFalse(text.contains("vật lý mỗi lần đến"));
+    if(tier==Tier.PLATINUM)assertTrue(text.contains("+ 01 phiếu ăn"));else assertFalse(text.contains("phiếu ăn"));
+    var image=new org.apache.pdfbox.rendering.PDFRenderer(doc).renderImageWithDPI(0,100);colors.add(image.getRGB(5,5));
+    var qrCrop=image.getSubimage((int)(115*100.0/72),(int)((doc.getPage(0).getMediaBox().getHeight()-440)*100.0/72),(int)(190*100.0/72),(int)(190*100.0/72));
+    var bitmap=new com.google.zxing.BinaryBitmap(new com.google.zxing.common.HybridBinarizer(new com.google.zxing.client.j2se.BufferedImageLuminanceSource(qrCrop)));
+    assertEquals(monthly.view(b.id).qrToken(),new com.google.zxing.MultiFormatReader().decode(bitmap).getText());
+   }
+  }
+  assertEquals(3,colors.size());
  }
  @Test void httpSecurityValidationAndPaidMonthlyDetail()throws Exception{
   mvc.perform(get("/api/staff/monthly/plans")).andExpect(status().isUnauthorized());

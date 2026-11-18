@@ -80,7 +80,7 @@ class TicketEmailIntegrationTest {
     @Test void monthlyBankPaymentSendsOneCardPdfWithTheCorrectQrAndDates()throws Exception {
         var p=new Product();p.code="MONTHMAIL-"+UUID.randomUUID().toString().substring(0,15);p.name="Vé tháng mail";p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(100);p=products.saveAndFlush(p);
         monthly.save(MonthlyDomain.Tier.GOLD,new MonthlyService.PlanInput(p.id,BigDecimal.valueOf(100),BigDecimal.valueOf(150),true),"admin");
-        var b=monthly.sell(new MonthlyService.SaleInput(MonthlyDomain.Tier.GOLD,"Khách tháng",null,"monthly@example.test",List.of(date())),"staff");
+        var b=monthly.sell(new MonthlyService.SaleInput(MonthlyDomain.Tier.GOLD,"Khách tháng","0901234567","monthly@example.test",List.of(date())),"staff");
         assertFalse(jobs.existsById(b.id));new TransactionTemplate(tm).executeWithoutResult(t->bookings.lockId(b.id).orElseThrow().paymentMethod="VIETQR");
         assertTrue(service.tryBankPayment(b.id,"monthly-bank-ref").applied());assertFalse(service.tryBankPayment(b.id,"duplicate-monthly-ref").applied());
         worker.process(b.id);worker.process(b.id);assertEquals("SENT",queue.view(b.id).state());assertEquals(1,smtp.messages.size());assertTrue(service.ticketList(b.id).isEmpty());

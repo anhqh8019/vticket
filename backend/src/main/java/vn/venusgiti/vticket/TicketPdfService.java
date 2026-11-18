@@ -42,17 +42,25 @@ public class TicketPdfService {
   try(var document=new PDDocument();var fontStream=new ClassPathResource("fonts/VenusgitiSans.ttf").getInputStream();var output=new ByteArrayOutputStream()){
    var font=PDType0Font.load(document,fontStream,true);var page=new PDPage(PDRectangle.A5);document.addPage(page);
    try(var c=new PDPageContentStream(document,page)){
+    Color background=switch(pass.tier()){
+     case SILVER -> new Color(240,242,245);
+     case GOLD -> new Color(255,243,212);
+     case PLATINUM -> new Color(232,239,248);
+    };
+    c.setNonStrokingColor(background);c.addRect(0,0,page.getMediaBox().getWidth(),page.getMediaBox().getHeight());c.fill();
     text(c,font,23,24,550,"VENUSGITI",new Color(35,89,75));
     text(c,font,17,24,520,"THẺ THÁNG · "+pass.tier(),Color.DARK_GRAY);
     wrap(c,font,pass.holderName(),13,24,493,370,2);
+    text(c,font,11,24,452,paid.order().phone==null?"":paid.order().phone,Color.DARK_GRAY);
     var matrix=new MultiFormatWriter().encode(pass.qrToken(),BarcodeFormat.QR_CODE,600,600,Map.of(EncodeHintType.MARGIN,4));
-    c.drawImage(LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix)),120,285,180,180);
-    wrap(c,font,"Vé: "+pass.ticketName()+(pass.mealName()==null?"":" + 1 phiếu ăn vật lý mỗi lần đến"),11,24,266,370,3);
-    wrap(c,font,"Ngày đăng ký: "+pass.days().stream().map(d->String.format(Locale.ROOT,"%02d",d.date().getDayOfMonth())).reduce((a,b)->a+", "+b).orElse("")+" · tháng "+java.time.YearMonth.from(pass.days().getFirst().date()),11,24,208,370,3);
-    text(c,font,10,24,150,"Mỗi ngày đăng ký nhận tối đa 1 lượt vé tại quầy.",Color.DARK_GRAY);
-    text(c,font,10,24,130,"Đưa QR thẻ này cho nhân viên VTicket để nhận vé lượt.",Color.DARK_GRAY);
-    text(c,font,10,24,110,"QR thẻ tháng không dùng trực tiếp tại cổng Smile.",Color.DARK_GRAY);
-    text(c,font,9,24,80,"Mã đơn: "+paid.order().id,Color.DARK_GRAY);
+    c.drawImage(LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix)),120,255,180,180);
+    wrap(c,font,"Vé: "+pass.ticketName()+(pass.mealName()==null?"":" + 01 phiếu ăn"),11,24,238,370,2);
+    var month=java.time.YearMonth.from(pass.days().getFirst().date());
+    wrap(c,font,"Ngày đăng ký: "+pass.days().stream().map(d->String.format(Locale.ROOT,"%02d",d.date().getDayOfMonth())).reduce((a,b)->a+", "+b).orElse("")+" · tháng "+month.getMonthValue()+" - "+month.getYear(),11,24,193,370,3);
+    text(c,font,10,24,130,"Mỗi ngày đăng ký nhận tối đa 1 lượt vé tại quầy.",Color.DARK_GRAY);
+    text(c,font,10,24,110,"Đưa QR thẻ này cho nhân viên để nhận vé lượt.",Color.DARK_GRAY);
+    text(c,font,10,24,90,"QR thẻ tháng không dùng trực tiếp tại cổng Smile.",Color.DARK_GRAY);
+    text(c,font,9,24,60,"Mã đơn: "+paid.order().id,Color.DARK_GRAY);
    }
    document.getDocumentInformation().setTitle("Thẻ tháng Venusgiti");document.save(output);return output.toByteArray();
   }catch(WriterException e){throw new IOException("Không tạo được QR thẻ tháng",e);}

@@ -838,3 +838,7 @@ a.button {
 
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
 @media(max-width:600px){.grid2{grid-template-columns:1fr;}}
+
+.monthly-card.monthly-silver{background:#f0f2f5;}
+.monthly-card.monthly-gold{background:#fff3d4;}
+.monthly-card.monthly-platinum{background:#e8eff8;}
