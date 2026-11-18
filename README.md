@@ -320,4 +320,4 @@ Thẻ tháng bắt buộc số điện thoại khi mua (vé lượt thông thư�
 
 Màn hình **Kiểm soát vé** nhận cả QR vé lượt và thẻ tháng. Thẻ tháng chỉ mở thông tin/xác nhận cấp vé, chưa trừ lượt khi quét; vé lượt vẫn check-in trên VTicket. Việc mở cổng/đánh dấu sử dụng bên Smile vẫn do hệ thống cổng Smile xử lý.
 
-PDF thẻ tháng luôn 1 trang A4: các ngày đăng ký gom theo tháng/năm, mỗi tháng 1 dòng; giữ đầy đủ ngày và QR trên cùng trang. Tuần trống không có ngày đăng ký không bắt buộc thêm lượt. Quy tắc mỗi tuần áp dụng khi tạo đơn mới, không sửa lịch thẻ đã bán.
+PDF thẻ tháng giữ khổ A5, luôn 1 trang: các ngày đăng ký gom theo tháng/năm, mỗi tháng 1 dòng; giữ đầy đủ ngày và QR trên cùng trang. Tuần trống không có ngày đăng ký không bắt buộc thêm lượt. Quy tắc mỗi tuần áp dụng khi tạo đơn mới, không sửa lịch thẻ đã bán.

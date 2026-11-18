@@ -95,11 +95,14 @@ class MonthlyIntegrationTest {
   for(var tier:Tier.values()){
    var b=sale(tier,"2027-01-04");service.cash(b.id,"staff");
    try(var doc=org.apache.pdfbox.Loader.loadPDF(pdf.generate(b.accessToken))){
+    assertEquals(1,doc.getNumberOfPages());
+    assertEquals(org.apache.pdfbox.pdmodel.common.PDRectangle.A5.getWidth(),doc.getPage(0).getMediaBox().getWidth(),0.01f);
+    assertEquals(org.apache.pdfbox.pdmodel.common.PDRectangle.A5.getHeight(),doc.getPage(0).getMediaBox().getHeight(),0.01f);
     var text=new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
     assertTrue(text.contains("0901234567"));assertTrue(text.contains("tháng 1 - 2027"));assertFalse(text.contains("VTicket"));assertFalse(text.contains("vật lý mỗi lần đến"));
     if(tier==Tier.PLATINUM)assertTrue(text.contains("+ 01 phiếu ăn"));else assertFalse(text.contains("phiếu ăn"));
     var image=new org.apache.pdfbox.rendering.PDFRenderer(doc).renderImageWithDPI(0,100);colors.add(image.getRGB(5,5));
-    var qrCrop=image.getSubimage((int)(360*100.0/72),(int)((doc.getPage(0).getMediaBox().getHeight()-805)*100.0/72),(int)(160*100.0/72),(int)(160*100.0/72));
+    var qrCrop=image.getSubimage((int)(255*100.0/72),(int)((doc.getPage(0).getMediaBox().getHeight()-565)*100.0/72),(int)(145*100.0/72),(int)(145*100.0/72));
     var bitmap=new com.google.zxing.BinaryBitmap(new com.google.zxing.common.HybridBinarizer(new com.google.zxing.client.j2se.BufferedImageLuminanceSource(qrCrop)));
     assertEquals(monthly.view(b.id).qrToken(),new com.google.zxing.MultiFormatReader().decode(bitmap).getText());
    }
@@ -156,7 +159,10 @@ class MonthlyIntegrationTest {
   var dates=java.util.stream.IntStream.range(0,30).mapToObj(i->LocalDate.of(2027,2,1).plusMonths(i).with(java.time.temporal.TemporalAdjusters.firstInMonth(DayOfWeek.SATURDAY))).toList();
   var b=monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",dates),"staff");service.cash(b.id,"staff");
   try(var doc=org.apache.pdfbox.Loader.loadPDF(pdf.generate(b.accessToken))){
-   assertEquals(1,doc.getNumberOfPages());var text=new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
+   assertEquals(1,doc.getNumberOfPages());assertEquals(1,doc.getNumberOfPages());
+    assertEquals(org.apache.pdfbox.pdmodel.common.PDRectangle.A5.getWidth(),doc.getPage(0).getMediaBox().getWidth(),0.01f);
+    assertEquals(org.apache.pdfbox.pdmodel.common.PDRectangle.A5.getHeight(),doc.getPage(0).getMediaBox().getHeight(),0.01f);
+    var text=new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
    for(var d:dates)assertTrue(text.contains("tháng "+d.getMonthValue()+" - "+d.getYear()+": "+String.format(Locale.ROOT,"%02d",d.getDayOfMonth())));
   }
  }
