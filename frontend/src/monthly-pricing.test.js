@@ -45,8 +45,18 @@ test("all tiers need 12-30 dates and Gold/Platinum still need a weekend in every
   assert.match(selectionError(tier,[...base,"2027-01-18"]),/18\/01\/2027/);
   assert.equal(selectionError(tier,[...base,"2027-01-18","2027-01-23"]),"");
   assert.match(selectionError(tier,[...base,"2027-01-30","2027-02-01"]),/01\/02\/2027/);
-  assert.equal(selectionError(tier,[...base,"2027-12-27","2028-01-01"]),"");
-  assert.match(selectionError(tier,[...base,"2027-12-27","2028-01-01","2028-01-03"]),/03\/01\/2028/);
+  assert.deepEqual(missingWeekendWeeks(["2027-12-27","2028-01-01"]),[]);
+  assert.deepEqual(missingWeekendWeeks(["2027-12-27","2028-01-01","2028-01-03"]),["2028-01-03"]);
  }
  assert.deepEqual(missingWeekendWeeks(["2027-01-10","2027-01-11"]),["2027-01-11"]);
+});
+
+test("at most two adjacent months, including December to January",async()=>{
+ const {withinTwoMonths,addMonthSelection,selectionError}=await import("./monthly-pricing.js");
+ assert.equal(withinTwoMonths(["2026-11-18","2026-12-01"],"2027-01-01"),false);
+ assert.equal(withinTwoMonths(["2026-11-18"],"2027-01-01"),false);
+ assert.equal(withinTwoMonths(["2026-12-31"],"2027-01-01"),true);
+ assert.equal(withinTwoMonths(["2027-01-01"],"2026-12-31"),true);
+ assert.deepEqual(addMonthSelection(["2026-11-18","2026-12-01"],["2027-01-01"]),["2026-11-18","2026-12-01"]);
+ assert.match(selectionError("GOLD",["2026-11-18","2026-12-01","2027-01-01"]),/2 tháng/);
 });

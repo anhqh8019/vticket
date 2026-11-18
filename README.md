@@ -301,7 +301,7 @@ Flyway tự chạy V14 trên DB vticket, không chạy migration trên Smile.
 
 - Chỉ bán tại quầy: menu **Vé tháng**. Admin vào **Thiết lập 3 hạng vé**, chọn vé gốc và giá một ngày thường / cuối tuần. Lễ Tết dùng lịch hàng năm và giá cuối tuần.
 - Silver chỉ chọn T2–T6 không phải ngày lễ; Gold và Platinum được chọn cả cuối tuần/lễ. Platinum được nhân viên phát **1 phiếu ăn vật lý mỗi lần đến**, không tạo QR/mã kho vé ăn.
-- Chọn các ngày ở **nhiều tháng/năm**, không chọn ngày đã qua (tối đa 30 ngày/thẻ, dùng hết/qua hết ngày đăng ký thì mua thẻ mới). Cả 3 hạng tối thiểu 12 ngày (Silver chỉ ngày thường); Gold/Platinum còn cần ít nhất 1 ngày thứ Bảy hoặc Chủ nhật **trong mỗi tuần có ngày đăng ký** (tuần thứ Hai–Chủ nhật), ngày lễ rơi vào ngày thường không thay thế điều kiện này. Tổng tiền = tổng đơn giá của ngày đã chọn; đây là giá từng ngày, không phải giá trọn tháng cố định. Được mua trước cho tháng sau. Không tự động thêm ngày, gia hạn hay chuyển lượt dư.
+- Chọn các ngày trong **tối đa 2 tháng liền kề** (cho phép tháng 12 và tháng 1 năm sau), không chọn ngày đã qua (tối đa 30 ngày/thẻ, dùng hết/qua hết ngày đăng ký thì mua thẻ mới). Cả 3 hạng tối thiểu 12 ngày (Silver chỉ ngày thường); Gold/Platinum còn cần ít nhất 1 ngày thứ Bảy hoặc Chủ nhật **trong mỗi tuần có ngày đăng ký** (tuần thứ Hai–Chủ nhật), ngày lễ rơi vào ngày thường không thay thế điều kiện này. Tổng tiền = tổng đơn giá của ngày đã chọn; đây là giá từng ngày, không phải giá trọn tháng cố định. Được mua trước cho tháng sau. Không tự động thêm ngày, gia hạn hay chuyển lượt dư.
 - Đơn dùng luồng CASH/VietQR hiện có; chỉ sau PAID mới có QR/PDF thẻ, gửi email nếu đã bật SMTP và có email. Giá, hạng, ngày, loại vé được chốt tại lúc tạo đơn, sửa gói không thay đổi thẻ cũ.
 - Máy quét QR dạng bàn phím: **Quét thẻ & cấp vé lượt**, quét rồi Enter. Nhân viên đối chiếu họ tên, xác nhận để cấp. Không có nhận diện khuôn mặt/CCCD tự động. Thẻ tháng không dùng trực tiếp tại Smile.
 - Mỗi thẻ được cấp đúng một lượt/ngày đã chọn. Lấy vé trong lô đang bán, còn hạn ngày đến, đủ điều kiện đồng bộ Smile; Platinum yêu cầu nhân viên xác nhận phát phiếu ăn vật lý, ghi nhận cùng lần cấp vé. Cấp và ghi lượt trong cùng transaction; thiếu vé vào cổng thì rollback, không ghi đã phát phiếu. Quét lại trả đơn/vé lượt cũ, kể cả đã dùng tại cổng, không cấp thêm. Khóa thẻ cùng ràng buộc DB ngăn hai quầy cấp trùng.
@@ -310,7 +310,7 @@ Flyway tự chạy V14 trên DB vticket, không chạy migration trên Smile.
 
 Kiểm thử triển khai vé tháng:
 1. Admin cấu hình đủ 3 hạng và tạo/mở bán lô vé vào cổng. Staff không được sửa cấu hình.
-2. Silver chặn T7/CN/lễ; Gold/Platinum cho chọn; ngày lễ dùng giá cuối tuần. Chọn ngày qua nhiều tháng/năm, kiểm tra tổng tiền và PDF lịch đầy đủ; chặn ngày quá khứ/trùng, bất kỳ hạng dưới 12 ngày, Gold/Platinum thiếu T7/CN trong bất kỳ tuần có ngày đăng ký.
+2. Silver chặn T7/CN/lễ; Gold/Platinum cho chọn; ngày lễ dùng giá cuối tuần. Chọn ngày trong 2 tháng liền kề, kiểm tra tổng tiền và PDF lịch đầy đủ; chặn ngày quá khứ/trùng, bất kỳ hạng dưới 12 ngày, Gold/Platinum thiếu T7/CN trong bất kỳ tuần có ngày đăng ký.
 3. Đơn chờ thanh toán không có QR và không cấp lượt. Test CASH, VietQR callback, tải PDF và email sau thanh toán; callback lặp không cấp thêm thẻ/vé.
 4. Quét thẻ đúng ngày → nhận vé mới. Quét lại, F5, hai quầy cùng cấp → cùng một đơn/vé. Thẻ chưa thanh toán, ngoài lịch hoặc hết hạn bị chặn.
 5. Platinum yêu cầu xác nhận phát phiếu ăn vật lý → đúng 1 vé vào cổng, ghi nhận đã phát phiếu ăn. Quét lại không phát thêm phiếu. Thiếu vé vào cổng → không mất lượt/không ghi đã phát phiếu.
@@ -320,4 +320,4 @@ Thẻ tháng bắt buộc số điện thoại khi mua (vé lượt thông thư�
 
 Màn hình **Kiểm soát vé** nhận cả QR vé lượt và thẻ tháng. Thẻ tháng chỉ mở thông tin/xác nhận cấp vé, chưa trừ lượt khi quét; vé lượt vẫn check-in trên VTicket. Việc mở cổng/đánh dấu sử dụng bên Smile vẫn do hệ thống cổng Smile xử lý.
 
-PDF thẻ tháng giữ khổ A5, luôn 1 trang: các ngày đăng ký gom theo tháng/năm, mỗi tháng 1 dòng; giữ đầy đủ ngày và QR trên cùng trang. Tuần trống không có ngày đăng ký không bắt buộc thêm lượt. Quy tắc mỗi tuần áp dụng khi tạo đơn mới, không sửa lịch thẻ đã bán.
+PDF thẻ tháng giữ khổ A5, luôn 1 trang: QR ở giữa như bố cục ban đầu, các ngày đăng ký gom theo tháng/năm, mỗi tháng 1 dòng, hướng dẫn nằm ngay dưới lịch; giữ đầy đủ ngày và QR trên cùng trang. Tuần trống không có ngày đăng ký không bắt buộc thêm lượt. Quy tắc mỗi tuần áp dụng khi tạo đơn mới, không sửa lịch thẻ đã bán.

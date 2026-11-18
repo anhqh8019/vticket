@@ -102,7 +102,7 @@ class MonthlyIntegrationTest {
     assertTrue(text.contains("0901234567"));assertTrue(text.contains("tháng 1 - 2027"));assertFalse(text.contains("VTicket"));assertFalse(text.contains("vật lý mỗi lần đến"));
     if(tier==Tier.PLATINUM)assertTrue(text.contains("+ 01 phiếu ăn"));else assertFalse(text.contains("phiếu ăn"));
     var image=new org.apache.pdfbox.rendering.PDFRenderer(doc).renderImageWithDPI(0,100);colors.add(image.getRGB(5,5));
-    var qrCrop=image.getSubimage((int)(255*100.0/72),(int)((doc.getPage(0).getMediaBox().getHeight()-565)*100.0/72),(int)(145*100.0/72),(int)(145*100.0/72));
+    var qrCrop=image.getSubimage((int)(120*100.0/72),(int)((doc.getPage(0).getMediaBox().getHeight()-445)*100.0/72),(int)(180*100.0/72),(int)(180*100.0/72));
     var bitmap=new com.google.zxing.BinaryBitmap(new com.google.zxing.common.HybridBinarizer(new com.google.zxing.client.j2se.BufferedImageLuminanceSource(qrCrop)));
     assertEquals(monthly.view(b.id).qrToken(),new com.google.zxing.MultiFormatReader().decode(bitmap).getText());
    }
@@ -135,11 +135,11 @@ class MonthlyIntegrationTest {
   for(var tier:List.of(Tier.GOLD,Tier.PLATINUM)){
    assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-01-04","2027-01-05"));
    assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-11-24")); // Weekday holiday is not a Saturday/Sunday.
-   var b=rawSale(tier,"2027-01-25","2027-01-26","2027-01-27","2027-01-28","2027-01-29","2027-01-30","2027-02-01","2027-02-02","2027-02-03","2027-02-04","2027-02-06","2028-01-01");assertEquals(0,b.total.compareTo(BigDecimal.valueOf(1350)));
+   var b=rawSale(tier,"2027-01-25","2027-01-26","2027-01-27","2027-01-28","2027-01-29","2027-01-30","2027-02-01","2027-02-02","2027-02-03","2027-02-04","2027-02-06","2027-02-07");assertEquals(0,b.total.compareTo(BigDecimal.valueOf(1350)));
    service.cash(b.id,"staff");assertEquals(12,monthly.view(b.id).days().size());
    try(var document=org.apache.pdfbox.Loader.loadPDF(pdf.generate(b.accessToken))){
     assertEquals(1,document.getNumberOfPages());var text=new org.apache.pdfbox.text.PDFTextStripper().getText(document);
-    for(var date:List.of("tháng 1 - 2027: 25, 26, 27, 28, 29, 30","tháng 2 - 2027: 01, 02, 03, 04, 06","tháng 1 - 2028: 01"))assertTrue(text.contains(date));
+    for(var date:List.of("tháng 1 - 2027: 25, 26, 27, 28, 29, 30","tháng 2 - 2027: 01, 02, 03, 04, 06, 07"))assertTrue(text.contains(date));
    }
   }
   var silver=rawSale(Tier.SILVER,"2027-01-25","2027-01-26","2027-01-27","2027-01-28","2027-01-29","2027-02-01","2027-02-02","2027-02-03","2027-02-04","2027-02-05","2027-02-11","2027-02-12");
@@ -151,20 +151,32 @@ class MonthlyIntegrationTest {
    assertThrows(ResponseStatusException.class,()->rawSale(tier,withDefault("2027-01-30","2027-02-01")));
    assertThrows(ResponseStatusException.class,()->rawSale(tier,withDefault("2027-12-27","2028-01-01","2028-01-03")));
    assertNotNull(rawSale(tier,withDefault()));
-   assertNotNull(rawSale(tier,withDefault("2027-12-27","2028-01-01","2028-01-03","2028-01-08")));
+   assertNotNull(rawSale(tier,"2027-12-27","2027-12-28","2027-12-29","2027-12-30","2027-12-31","2028-01-01","2028-01-02","2028-01-03","2028-01-04","2028-01-05","2028-01-06","2028-01-08"));
    assertNotNull(rawSale(tier,withDefault("2027-02-06","2027-02-20"))); // Empty intervening weeks do not require visits.
   }
  }
- @Test void thirtyMonthRowsStillFitOnePageWithoutMissingAnyMonth()throws Exception{
-  var dates=java.util.stream.IntStream.range(0,30).mapToObj(i->LocalDate.of(2027,2,1).plusMonths(i).with(java.time.temporal.TemporalAdjusters.firstInMonth(DayOfWeek.SATURDAY))).toList();
+ @Test void thirtyDaysInTwoMonthsFitOneA5PageWithCenteredQrAndNearbyInstructions()throws Exception{
+  var dates=new ArrayList<LocalDate>();for(int i=0;i<28;i++)dates.add(LocalDate.of(2027,1,4).plusDays(i));dates.add(LocalDate.of(2027,2,6));dates.add(LocalDate.of(2027,2,7));
   var b=monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",dates),"staff");service.cash(b.id,"staff");
   try(var doc=org.apache.pdfbox.Loader.loadPDF(pdf.generate(b.accessToken))){
-   assertEquals(1,doc.getNumberOfPages());assertEquals(1,doc.getNumberOfPages());
-    assertEquals(org.apache.pdfbox.pdmodel.common.PDRectangle.A5.getWidth(),doc.getPage(0).getMediaBox().getWidth(),0.01f);
-    assertEquals(org.apache.pdfbox.pdmodel.common.PDRectangle.A5.getHeight(),doc.getPage(0).getMediaBox().getHeight(),0.01f);
-    var text=new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
-   for(var d:dates)assertTrue(text.contains("tháng "+d.getMonthValue()+" - "+d.getYear()+": "+String.format(Locale.ROOT,"%02d",d.getDayOfMonth())));
+   assertEquals(1,doc.getNumberOfPages());
+   assertEquals(org.apache.pdfbox.pdmodel.common.PDRectangle.A5.getWidth(),doc.getPage(0).getMediaBox().getWidth(),0.01f);
+   assertEquals(org.apache.pdfbox.pdmodel.common.PDRectangle.A5.getHeight(),doc.getPage(0).getMediaBox().getHeight(),0.01f);
+   var text=new org.apache.pdfbox.text.PDFTextStripper().getText(doc);assertTrue(text.contains("tháng 1 - 2027:"));assertTrue(text.contains("tháng 2 - 2027: 06, 07"));
+   var rows=new HashMap<String,Float>();
+   var stripper=new org.apache.pdfbox.text.PDFTextStripper(){@Override protected void writeString(String value,List<org.apache.pdfbox.text.TextPosition> positions)throws java.io.IOException{if(!positions.isEmpty())rows.put(value,positions.getFirst().getYDirAdj());super.writeString(value,positions);}};
+   stripper.getText(doc);
+   var schedule=rows.entrySet().stream().filter(e->e.getKey().contains("tháng 2 - 2027")).findFirst().orElseThrow().getValue();
+   var instruction=rows.entrySet().stream().filter(e->e.getKey().contains("Mỗi ngày đăng ký")).findFirst().orElseThrow().getValue();
+   assertTrue(instruction>schedule&&instruction-schedule<50,"Hướng dẫn phải nằm sát lịch đăng ký");
   }
+ }
+ @Test void rejectThirdOrNonAdjacentMonthAndAllowDecemberJanuary()throws Exception{
+  var invalid=withDefault("2027-02-06","2027-03-06");
+  var error=assertThrows(ResponseStatusException.class,()->rawSale(Tier.GOLD,invalid));assertTrue(error.getReason().contains("2 tháng"));
+  assertThrows(ResponseStatusException.class,()->rawSale(Tier.GOLD,withDefault("2027-03-06")));
+  var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+  mvc.perform(post("/api/staff/monthly/orders").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",Arrays.stream(invalid).map(LocalDate::parse).toList())))).andExpect(status().isConflict());
  }
  @Test void allTiersRejectElevenDaysAndAcceptTwelveThroughHttp()throws Exception{
   var mapper=tools.jackson.databind.json.JsonMapper.builder().build();

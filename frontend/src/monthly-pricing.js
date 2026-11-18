@@ -18,9 +18,14 @@ export function missingWeekendWeeks(dates){
  }
  return [...weeks].filter(week=>!covered.has(week)).sort();
 }
+export function withinTwoMonths(selected,date){
+ const months=[...selected,...(date?[date]:[])].map(d=>Number(d.slice(0,4))*12+Number(d.slice(5,7)));
+ return !months.length||Math.max(...months)-Math.min(...months)<=1;
+}
 export function selectionError(tier,dates){
  if(!dates.length)return "Vui lòng chọn ngày sử dụng.";
  if(dates.length>30)return "Tối đa 30 ngày trong một thẻ.";
+ if(!withinTwoMonths(dates))return "Chỉ chọn ngày trong tối đa 2 tháng liền kề.";
  if(dates.length<12)return `${tiers[tier]} cần tối thiểu 12 ngày (đã chọn ${dates.length}/12 ngày).`;
  if(tier!=="SILVER"){
   const missing=missingWeekendWeeks(dates);
@@ -28,4 +33,4 @@ export function selectionError(tier,dates){
  }
  return "";
 }
-export function addMonthSelection(selected,dates){return [...new Set([...selected,...dates])].slice(0,30).sort();}
+export function addMonthSelection(selected,dates){const result=[...selected];for(const date of dates)if(result.length<30&&!result.includes(date)&&withinTwoMonths(result,date))result.push(date);return result.sort();}
