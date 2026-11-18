@@ -114,6 +114,13 @@ class MonthlyIntegrationTest {
   mvc.perform(post("/api/staff/scan").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"qrToken\":\""+ticket.qrToken+"\"}")).andExpect(status().isConflict());
   mvc.perform(post("/api/staff/scan").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"qrToken\":\"invalid-token\"}")).andExpect(status().isNotFound());
  }
+ @Test void thirtySelectedDaysMaximumIsEnforcedByServiceAndHttp()throws Exception{
+  var dates=java.util.stream.IntStream.range(0,31).mapToObj(i->LocalDate.of(2027,1,4).plusDays(i)).toList();
+  assertThrows(ResponseStatusException.class,()->monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",dates),"staff"));
+  var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+  mvc.perform(post("/api/staff/monthly/orders").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",dates)))).andExpect(status().isBadRequest());
+  var b=monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","0901234567","",dates.subList(0,30)),"staff");assertEquals(30,monthly.view(b.id).days().size());
+ }
  @Test void minimumDaysWeekendAndCrossMonthCrossYearPricing()throws Exception{
   assertThrows(ResponseStatusException.class,()->rawSale(Tier.SILVER,"2027-01-04"));
   for(var tier:List.of(Tier.GOLD,Tier.PLATINUM)){

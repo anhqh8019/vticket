@@ -26,3 +26,12 @@ test("selections accumulate across months and years without duplicates",async()=
  assert.equal(selectionError("SILVER",Array(12).fill("2027-01-04")),"");
  for(const tier of ["GOLD","PLATINUM"]){assert.match(selectionError(tier,["2027-11-24"]),/thứ Bảy/);assert.equal(selectionError(tier,["2027-01-09"]),"");}
 });
+
+test("one pass allows at most 30 dates and adding a month preserves earlier choices",async()=>{
+ const {addMonthSelection,selectionError}=await import("./monthly-pricing.js");
+ const january=monthDays("2027-01");
+ const chosen=addMonthSelection(["2027-02-01"],january);
+ assert.equal(chosen.length,30);assert.ok(chosen.includes("2027-02-01"));
+ assert.match(selectionError("GOLD",january),/30/);
+ assert.equal(selectionError("GOLD",january.slice(0,30)),"");
+});

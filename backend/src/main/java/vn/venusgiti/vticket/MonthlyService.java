@@ -20,7 +20,7 @@ public class MonthlyService {
  private final ComboPricing pricing; private final Audits audits; private final Clock clock;
  MonthlyService(MonthlyPlans plans,MonthlyPasses passes,Products products,Bookings bookings,Tickets tickets,InventoryService inventory,ComboPricing pricing,Audits audits,Clock clock){this.plans=plans;this.passes=passes;this.products=products;this.bookings=bookings;this.tickets=tickets;this.inventory=inventory;this.pricing=pricing;this.audits=audits;this.clock=clock;}
  public record PlanInput(@NotNull Long ticketProductId,@NotNull @DecimalMin("0") @DecimalMax("1000000000") @Digits(integer=10,fraction=0) BigDecimal weekdayPrice,@NotNull @DecimalMin("0") @DecimalMax("1000000000") @Digits(integer=10,fraction=0) BigDecimal weekendPrice,@NotNull Boolean active) {}
- public record SaleInput(@NotNull Tier tier,@NotBlank @Size(max=150) String holderName,@NotBlank @Size(max=20) @Pattern(regexp="^\\+?[0-9 ()-]{8,20}$") String phone,@Email @Size(max=254) String email,@NotEmpty @Size(max=366) List<@NotNull LocalDate> dates) {}
+ public record SaleInput(@NotNull Tier tier,@NotBlank @Size(max=150) String holderName,@NotBlank @Size(max=20) @Pattern(regexp="^\\+?[0-9 ()-]{8,20}$") String phone,@Email @Size(max=254) String email,@NotEmpty @Size(max=30) List<@NotNull LocalDate> dates) {}
  public record RedeemInput(@NotBlank @Size(max=36) String qrToken,@NotNull Boolean holderConfirmed,Boolean physicalMealConfirmed) {}
  public record DayView(LocalDate date,String dayType,BigDecimal price,String issuedBookingId,Instant issuedAt,boolean physicalMealIssued) {}
  public record View(String bookingId,Tier tier,String holderName,String phone,String ticketName,String mealName,String qrToken,String status,List<DayView> days,int remaining) {}
@@ -46,7 +46,7 @@ public class MonthlyService {
   // Re-read after the product lock: plan edits use the same lock ordering.
   p=plans.lockTier(in.tier()).orElseThrow(MonthlyService::missing);entityManager.refresh(p);require(p.active&&ids.contains(p.ticketProductId),"Cấu hình gói vừa thay đổi, vui lòng tạo lại");
   var base=ticket(p.ticketProductId);
-  var dates=new TreeSet<>(in.dates());require(dates.size()==in.dates().size(),"Ngày sử dụng không được trùng");require(!dates.first().isBefore(today()),"Không chọn ngày sử dụng đã qua");require(dates.size()<=366,"Tối đa 366 ngày trong một thẻ");
+  var dates=new TreeSet<>(in.dates());require(dates.size()==in.dates().size(),"Ngày sử dụng không được trùng");require(!dates.first().isBefore(today()),"Không chọn ngày sử dụng đã qua");require(dates.size()<=30,"Tối đa 30 ngày trong một thẻ; hết ngày đăng ký vui lòng mua thẻ mới");
   require(p.tier!=Tier.SILVER||dates.size()>=12,"Silver cần chọn tối thiểu 12 ngày thường");
   require(p.tier==Tier.SILVER||dates.stream().anyMatch(d->d.getDayOfWeek()==DayOfWeek.SATURDAY||d.getDayOfWeek()==DayOfWeek.SUNDAY),"Gold và Platinum cần ít nhất 1 ngày thứ Bảy hoặc Chủ nhật");
   var b=booking(in.holderName(),phone,in.email(),dates.first(),actor);var pass=new Pass();pass.bookingId=b.id;pass.qrToken=UUID.randomUUID().toString();pass.tier=p.tier;pass.ticketProductId=base.id;pass.ticketName=base.name;pass.mealName=p.tier==Tier.PLATINUM?"Phiếu ăn vật lý":null;pass.holderName=b.customerName;pass.createdAt=clock.instant();

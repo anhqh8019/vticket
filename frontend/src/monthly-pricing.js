@@ -11,9 +11,9 @@ export function monthlyDayPrice(plan,date,holidays){return Number(dayType(date,h
 
 export function selectionError(tier,dates){
  if(!dates.length)return "Vui lòng chọn ngày sử dụng.";
- if(dates.length>366)return "Tối đa 366 ngày trong một thẻ.";
+ if(dates.length>30)return "Tối đa 30 ngày trong một thẻ.";
  if(tier==="SILVER"&&dates.length<12)return `Silver cần tối thiểu 12 ngày thường (đã chọn ${dates.length}/12 ngày).`;
  if(tier!=="SILVER"&&!dates.some(date=>[0,6].includes(new Date(`${date}T00:00:00Z`).getUTCDay())))return "Gold và Platinum cần ít nhất 1 ngày thứ Bảy hoặc Chủ nhật.";
  return "";
 }
-export function addMonthSelection(selected,dates){return [...new Set([...selected,...dates])].sort();}
+export function addMonthSelection(selected,dates){return [...new Set([...selected,...dates])].slice(0,30).sort();}
