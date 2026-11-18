@@ -17,3 +17,12 @@ test("monthly total uses weekday and shared weekend/holiday rates including zero
  const total=["2027-01-01","2027-01-04","2027-01-09"].reduce((sum,date)=>sum+monthlyDayPrice(p,date,holidays),0);
  assert.equal(total,400);assert.equal(monthlyDayPrice({...p,weekendPrice:0},"2027-01-09",holidays),0);
 });
+
+test("selections accumulate across months and years without duplicates",async()=>{
+ const {addMonthSelection,selectionError}=await import("./monthly-pricing.js");
+ const selected=addMonthSelection(["2026-12-31"],["2027-01-01","2026-12-31"]);
+ assert.deepEqual(selected,["2026-12-31","2027-01-01"]);
+ assert.match(selectionError("SILVER",Array(11).fill("2027-01-04")),/12/);
+ assert.equal(selectionError("SILVER",Array(12).fill("2027-01-04")),"");
+ for(const tier of ["GOLD","PLATINUM"]){assert.match(selectionError(tier,["2027-11-24"]),/thứ Bảy/);assert.equal(selectionError(tier,["2027-01-09"]),"");}
+});
