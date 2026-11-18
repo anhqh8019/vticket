@@ -7,7 +7,14 @@ import vn.venusgiti.vticket.MonthlyDomain.*;
 @RestController @RequestMapping("/api")
 public class MonthlyController {
  private final MonthlyService monthly;
- MonthlyController(MonthlyService monthly){this.monthly=monthly;}
+ private final BookingService bookings;
+ MonthlyController(MonthlyService monthly,BookingService bookings){this.monthly=monthly;this.bookings=bookings;}
+ public record ScanResult(String type,MonthlyService.View monthlyPass,vn.venusgiti.vticket.Domain.Ticket ticket) {}
+ @PostMapping("/staff/scan") public ScanResult scan(@Valid @RequestBody Requests.CheckInInput input,Authentication a){
+  var pass=monthly.recognize(input.qrToken());
+  if(pass!=null)return new ScanResult("MONTHLY_PASS",pass,null);
+  return new ScanResult("TICKET",null,bookings.checkIn(input.qrToken(),a.getName()));
+ }
  @GetMapping("/staff/monthly/plans") public Object plans(){return monthly.plans();}
  @PutMapping("/admin/monthly/plans/{tier}") public Object save(@PathVariable Tier tier,@Valid @RequestBody MonthlyService.PlanInput input,Authentication a){return monthly.save(tier,input,a.getName());}
  @PostMapping("/staff/monthly/orders") public Object sell(@Valid @RequestBody MonthlyService.SaleInput input,Authentication a){return monthly.sell(input,a.getName());}

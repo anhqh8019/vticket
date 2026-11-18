@@ -317,3 +317,5 @@ Kiểm thử triển khai vé tháng:
 6. In PDF vé lượt, thử qua cổng Smile thật và đối chiếu quy trình phát phiếu ăn vật lý. Kiểm tra vé dùng một lần; QR thẻ tháng chỉ tra cứu/cấp tại quầy.
 
 Thẻ tháng bắt buộc số điện thoại khi mua (vé lượt thông thường vẫn giữ quy định cũ). Số điện thoại hiển thị dưới tên trên thẻ/PDF. Màu thẻ: Silver xám bạc, Gold vàng nhạt, Platinum xanh nhạt.
+
+Màn hình **Kiểm soát vé** nhận cả QR vé lượt và thẻ tháng. Thẻ tháng chỉ mở thông tin/xác nhận cấp vé, chưa trừ lượt khi quét; vé lượt vẫn check-in trên VTicket. Việc mở cổng/đánh dấu sử dụng bên Smile vẫn do hệ thống cổng Smile xử lý.

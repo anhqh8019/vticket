@@ -59,7 +59,8 @@ public class MonthlyService {
   return new View(p.bookingId,p.tier,p.holderName,b.phone,p.ticketName,p.mealName,b.status==Status.PAID?p.qrToken:null,state,p.days.entrySet().stream().sorted(Map.Entry.comparingByKey()).map(e->new DayView(e.getKey(),e.getValue().dayType,e.getValue().price,e.getValue().issuedBookingId,e.getValue().issuedAt,p.tier==Tier.PLATINUM&&e.getValue().issuedBookingId!=null)).toList(),remaining);
  }
  public List<View> list(){return passes.findTop200ByOrderByCreatedAtDesc().stream().map(p->view(p,bookings.findById(p.bookingId).orElseThrow())).toList();}
- public View lookup(String token){var pass=passes.findByQrToken(token).orElseThrow(MonthlyService::missing);return view(pass,bookings.findById(pass.bookingId).orElseThrow());}
+ public View recognize(String token){return passes.findByQrToken(token.strip()).map(p->view(p,bookings.findById(p.bookingId).orElseThrow())).orElse(null);}
+ public View lookup(String token){var found=recognize(token);if(found==null)throw missing();return found;}
  public Issued redeem(RedeemInput in,String actor){
   require(Boolean.TRUE.equals(in.holderConfirmed()),"Nhân viên cần đối chiếu người sử dụng trước khi cấp vé");
   var found=passes.findByQrToken(in.qrToken().strip()).orElseThrow(MonthlyService::missing);

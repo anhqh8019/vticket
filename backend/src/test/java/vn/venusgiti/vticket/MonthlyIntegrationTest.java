@@ -94,6 +94,19 @@ class MonthlyIntegrationTest {
   }
   assertEquals(3,colors.size());
  }
+ @Test void unifiedScanRecognizesMonthlyWithoutConsumingAndStillChecksInSingleTickets()throws Exception{
+  var b=sale(Tier.PLATINUM,"2027-01-04");service.cash(b.id,"staff");var token=monthly.view(b.id).qrToken();
+  mvc.perform(post("/api/staff/scan").contentType("application/json").content("{\"qrToken\":\""+token+"\"}")).andExpect(status().isForbidden());
+  mvc.perform(post("/api/staff/scan").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"qrToken\":\" "+token+" \"}"))
+    .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("MONTHLY_PASS")).andExpect(jsonPath("$.monthlyPass.holderName").value("Khách tháng")).andExpect(jsonPath("$.monthlyPass.remaining").value(1)).andExpect(jsonPath("$.ticket").doesNotExist());
+  assertTrue(service.ticketList(b.id).isEmpty());assertFalse(monthly.view(b.id).days().getFirst().physicalMealIssued());
+  mvc.perform(post("/api/staff/check-in").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"qrToken\":\""+token+"\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("thẻ tháng")));
+  var issued=monthly.redeem(new MonthlyService.RedeemInput(token,true,true),"staff");var ticket=issued.tickets().getFirst();
+  mvc.perform(post("/api/staff/scan").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"qrToken\":\""+ticket.qrToken+"\"}"))
+   .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("TICKET")).andExpect(jsonPath("$.ticket.id").value(ticket.id)).andExpect(jsonPath("$.ticket.checkedInAt").isNotEmpty());
+  mvc.perform(post("/api/staff/scan").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"qrToken\":\""+ticket.qrToken+"\"}")).andExpect(status().isConflict());
+  mvc.perform(post("/api/staff/scan").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"qrToken\":\"invalid-token\"}")).andExpect(status().isNotFound());
+ }
  @Test void httpSecurityValidationAndPaidMonthlyDetail()throws Exception{
   mvc.perform(get("/api/staff/monthly/plans")).andExpect(status().isUnauthorized());
   mvc.perform(put("/api/admin/monthly/plans/GOLD").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{}")).andExpect(status().isForbidden());

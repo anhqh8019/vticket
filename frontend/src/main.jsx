@@ -250,7 +250,7 @@ function App() {
           />
         )}
         {page === "monthly" && user && <Monthly products={products} admin={admin} run={run} busy={busy} open={open} />}
-        {page === "checkin" && user && <CheckIn run={run} busy={busy} />}
+        {page === "checkin" && user && <CheckIn run={run} busy={busy} open={open} />}
         {page === "orders" && user && (
           <Orders run={run} busy={busy} open={open} />
         )}
@@ -956,53 +956,32 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
     </>
   );
 }
-function CheckIn({ run, busy }) {
-  const [token, T] = useState(""),
-    [result, R] = useState(null);
-  return (
+function CheckIn({ run, busy, open }) {
+  const [token, T] = useState(""), [result, R] = useState(null);
+  return <>
     <section className="panel narrow">
-      <span className="eyebrow">KIỂM SOÁT VÀO CỔNG</span>
-      <h1>Check-in vé</h1>
-      <p>
-        Quét bằng máy đọc QR USB vào ô bên dưới hoặc dán mã vé. Mỗi QR tương ứng
-        một lượt vào cổng.
-      </p>
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          R(null);
-          run(async () => {
-            R(
-              await api("/staff/check-in", {
-                method: "POST",
-                body: { qrToken: token.trim() },
-              }),
-            );
-            T("");
-          });
-        }}
-      >
-        <Field
-          label="Mã QR vé"
-          value={token}
-          onChange={(e) => T(e.target.value)}
-          autoFocus
-          required
-        />
-        <button disabled={busy} className="full">
-          Kiểm tra & check-in
-        </button>
+      <span className="eyebrow">KIỂM SOÁT VÉ</span>
+      <h1>Quét vé / thẻ tháng</h1>
+      <p>Quét bằng máy đọc QR USB hoặc nhập mã. Vé lượt sẽ ghi nhận check-in trên VTicket; thẻ tháng sẽ mở thông tin để xác nhận cấp vé lượt.</p>
+      <form onSubmit={e=>{
+        e.preventDefault();R(null);
+        run(async()=>{
+          R(await api("/staff/scan",{method:"POST",body:{qrToken:token.trim()}}));
+          T("");
+        });
+      }}>
+        <Field label="Mã QR vé / thẻ tháng" value={token} onChange={e=>{T(e.target.value);R(null);}} autoFocus required maxLength={64}/>
+        <button disabled={busy} className="full">Kiểm tra mã</button>
       </form>
-      {result && (
-        <div className="success">
-          <h3>✓ Check-in thành công</h3>
-          {result.productName}
-          <p>{result.includedServices}</p>
-          <small>{new Date(result.checkedInAt).toLocaleString("vi-VN")}</small>
-        </div>
-      )}
+      {result?.type==="TICKET"&&<div className="success">
+        <h3>✓ Check-in vé lượt thành công trên VTicket</h3>
+        {result.ticket.productName}<p>{result.ticket.includedServices}</p>
+        <small>{new Date(result.ticket.checkedInAt).toLocaleString("vi-VN")}</small>
+      </div>}
+      {result?.type==="MONTHLY_PASS"&&<p>Đã nhận diện thẻ tháng. Đối chiếu thông tin khách và xác nhận bên dưới để nhận vé lượt; thao tác quét thẻ chưa trừ lượt.</p>}
     </section>
-  );
+    {result?.type==="MONTHLY_PASS"&&<MonthlyCard key={result.monthlyPass.bookingId} pass={result.monthlyPass} busy={busy} run={run} open={open}/>}
+  </>;
 }
 function Orders({ run, busy, open }) {
   const [rows, R] = useState([]),
