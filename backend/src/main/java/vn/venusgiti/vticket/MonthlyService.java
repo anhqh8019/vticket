@@ -47,7 +47,7 @@ public class MonthlyService {
   p=plans.lockTier(in.tier()).orElseThrow(MonthlyService::missing);entityManager.refresh(p);require(p.active&&ids.contains(p.ticketProductId),"Cấu hình gói vừa thay đổi, vui lòng tạo lại");
   var base=ticket(p.ticketProductId);
   var dates=new TreeSet<>(in.dates());require(dates.size()==in.dates().size(),"Ngày sử dụng không được trùng");require(!dates.first().isBefore(today()),"Không chọn ngày sử dụng đã qua");require(dates.size()<=30,"Tối đa 30 ngày trong một thẻ; hết ngày đăng ký vui lòng mua thẻ mới");
-  require(p.tier!=Tier.SILVER||dates.size()>=12,"Silver cần chọn tối thiểu 12 ngày thường");
+  require(dates.size()>=12,"Vé tháng Silver, Gold và Platinum cần chọn tối thiểu 12 ngày");
   if(p.tier!=Tier.SILVER){
    var weeks=new TreeSet<LocalDate>();var weekendWeeks=new HashSet<LocalDate>();
    for(var d:dates){var monday=d.with(java.time.temporal.TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY));weeks.add(monday);if(d.getDayOfWeek()==DayOfWeek.SATURDAY||d.getDayOfWeek()==DayOfWeek.SUNDAY)weekendWeeks.add(monday);}

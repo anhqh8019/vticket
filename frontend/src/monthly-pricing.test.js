@@ -24,7 +24,7 @@ test("selections accumulate across months and years without duplicates",async()=
  assert.deepEqual(selected,["2026-12-31","2027-01-01"]);
  assert.match(selectionError("SILVER",Array(11).fill("2027-01-04")),/12/);
  assert.equal(selectionError("SILVER",Array(12).fill("2027-01-04")),"");
- for(const tier of ["GOLD","PLATINUM"]){assert.match(selectionError(tier,["2027-11-24"]),/thứ Bảy/);assert.equal(selectionError(tier,["2027-01-09"]),"");}
+ for(const tier of ["GOLD","PLATINUM"]){assert.match(selectionError(tier,["2027-11-24"]),/12/);assert.match(selectionError(tier,["2027-01-09"]),/12/);}
 });
 
 test("one pass allows at most 30 dates and adding a month preserves earlier choices",async()=>{
@@ -36,15 +36,17 @@ test("one pass allows at most 30 dates and adding a month preserves earlier choi
  assert.equal(selectionError("GOLD",january.slice(0,30)),"");
 });
 
-test("every selected Monday-Sunday week needs a weekend, including cross-month and cross-year weeks",async()=>{
+test("all tiers need 12-30 dates and Gold/Platinum still need a weekend in every selected week",async()=>{
  const {selectionError,missingWeekendWeeks}=await import("./monthly-pricing.js");
+ const base=["2027-01-04","2027-01-05","2027-01-07","2027-01-08","2027-01-09","2027-01-10","2027-01-11","2027-01-12","2027-01-14","2027-01-15","2027-01-16","2027-01-17"];
+ for(const tier of ["SILVER","GOLD","PLATINUM"])assert.match(selectionError(tier,base.slice(0,11)),/12/);
  for(const tier of ["GOLD","PLATINUM"]){
-  assert.match(selectionError(tier,["2027-01-04","2027-01-09","2027-01-11"]),/11\/01\/2027/);
-  assert.equal(selectionError(tier,["2027-01-04","2027-01-09","2027-01-11","2027-01-17"]),"");
-  assert.match(selectionError(tier,["2027-01-30","2027-02-01"]),/01\/02\/2027/);
-  assert.equal(selectionError(tier,["2027-12-27","2028-01-01"]),"");
-  assert.match(selectionError(tier,["2027-12-27","2028-01-01","2028-01-03"]),/03\/01\/2028/);
-  assert.equal(selectionError(tier,["2027-01-09","2027-01-24"]),"");
+  assert.equal(selectionError(tier,base),"");
+  assert.match(selectionError(tier,[...base,"2027-01-18"]),/18\/01\/2027/);
+  assert.equal(selectionError(tier,[...base,"2027-01-18","2027-01-23"]),"");
+  assert.match(selectionError(tier,[...base,"2027-01-30","2027-02-01"]),/01\/02\/2027/);
+  assert.equal(selectionError(tier,[...base,"2027-12-27","2028-01-01"]),"");
+  assert.match(selectionError(tier,[...base,"2027-12-27","2028-01-01","2028-01-03"]),/03\/01\/2028/);
  }
  assert.deepEqual(missingWeekendWeeks(["2027-01-10","2027-01-11"]),["2027-01-11"]);
 });

@@ -21,7 +21,7 @@ export function missingWeekendWeeks(dates){
 export function selectionError(tier,dates){
  if(!dates.length)return "Vui lòng chọn ngày sử dụng.";
  if(dates.length>30)return "Tối đa 30 ngày trong một thẻ.";
- if(tier==="SILVER"&&dates.length<12)return `Silver cần tối thiểu 12 ngày thường (đã chọn ${dates.length}/12 ngày).`;
+ if(dates.length<12)return `${tiers[tier]} cần tối thiểu 12 ngày (đã chọn ${dates.length}/12 ngày).`;
  if(tier!=="SILVER"){
   const missing=missingWeekendWeeks(dates);
   if(missing.length)return `Gold và Platinum cần ít nhất 1 ngày thứ Bảy hoặc Chủ nhật trong mỗi tuần đăng ký (thứ Hai–Chủ nhật). Tuần thiếu bắt đầu: ${missing.map(d=>d.split("-").reverse().join("/")).join(", ")}.`;

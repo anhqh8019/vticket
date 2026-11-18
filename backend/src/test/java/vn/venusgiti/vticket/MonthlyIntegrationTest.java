@@ -27,6 +27,8 @@ class MonthlyIntegrationTest {
  }
  @TestConfiguration static class Config {@Bean @Primary TestClock monthlyClock(){return new TestClock();}}
  @Autowired MonthlyService monthly;@Autowired Products products;@Autowired InventoryService inventory;@Autowired BookingService service;@Autowired MonthlyPasses passes;@Autowired Bookings bookings;@Autowired TicketStock stock;@Autowired TicketPdfService pdf;@Autowired MockMvc mvc;@Autowired TestClock clock;
+ static final List<String> DEFAULT_DATES=List.of("2027-01-04","2027-01-05","2027-01-07","2027-01-08","2027-01-09","2027-01-10","2027-01-11","2027-01-12","2027-01-14","2027-01-15","2027-01-16","2027-01-17");
+ String[] withDefault(String... extra){var dates=new TreeSet<>(DEFAULT_DATES);dates.addAll(List.of(extra));return dates.toArray(String[]::new);}
  Product base,meal;
  Product product(String name){var p=new Product();p.code="M-"+UUID.randomUUID();p.name=name;p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(999);return products.saveAndFlush(p);}
  void batch(Product p,int quantity){inventory.createBatch(new BatchInput("M-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(Locale.ROOT),p.id,quantity,LocalDate.of(2027,1,1),LocalDate.of(2027,12,31)),"admin");}
@@ -36,16 +38,19 @@ class MonthlyIntegrationTest {
  Booking sale(Tier tier,String...dates){
   var chosen=new TreeSet<>(Arrays.stream(dates).map(LocalDate::parse).toList());
   if(tier==Tier.SILVER){for(var d=LocalDate.of(2027,1,4);chosen.size()<12;d=d.plusDays(1))if(d.getDayOfWeek().getValue()<=5)chosen.add(d);}
-  else for(var d:new ArrayList<>(chosen))if(d.getDayOfWeek().getValue()<6)chosen.add(d.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY)));
+  else {
+   for(var date:DEFAULT_DATES){if(chosen.size()>=12)break;chosen.add(LocalDate.parse(date));}
+   for(var d:new ArrayList<>(chosen))if(d.getDayOfWeek().getValue()<6)chosen.add(d.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY)));
+  }
   return rawSale(tier,chosen.stream().map(LocalDate::toString).toArray(String[]::new));
  }
  MonthlyService.RedeemInput redeemInput(Booking b){return new MonthlyService.RedeemInput(passes.findById(b.id).orElseThrow().qrToken,true,true);}
  @BeforeEach void setup(){clock.instant=Instant.parse("2027-01-04T03:00:00Z");base=product("Vé tắm");meal=product("Vé ăn");batch(base,20);for(var t:Tier.values())plan(t);}
  @Test void pricesDatesAndPaymentGateWithPdf()throws Exception{
-  var b=sale(Tier.GOLD,"2027-01-04","2027-01-09","2027-01-10");assertEquals(0,b.total.compareTo(BigDecimal.valueOf(400)));assertEquals(Channel.COUNTER,b.channel);assertNull(monthly.view(b.id).qrToken());assertTrue(service.ticketList(b.id).isEmpty());
+  var b=sale(Tier.GOLD,"2027-01-04","2027-01-09","2027-01-10");assertEquals(0,b.total.compareTo(BigDecimal.valueOf(1400)));assertEquals(Channel.COUNTER,b.channel);assertNull(monthly.view(b.id).qrToken());assertTrue(service.ticketList(b.id).isEmpty());
   assertThrows(ResponseStatusException.class,()->monthly.redeem(redeemInput(b),"staff"));assertThrows(ResponseStatusException.class,()->pdf.generate(b.accessToken));
   service.cash(b.id,"staff");assertNotNull(monthly.view(b.id).qrToken());assertTrue(service.ticketList(b.id).isEmpty());assertTrue(pdf.generate(b.accessToken).length>1000);
-  var issued=monthly.redeem(redeemInput(b),"staff");assertEquals(1,issued.tickets().size());assertFalse(issued.alreadyIssued());assertEquals(2,monthly.view(b.id).remaining());
+  var issued=monthly.redeem(redeemInput(b),"staff");assertEquals(1,issued.tickets().size());assertFalse(issued.alreadyIssued());assertEquals(11,monthly.view(b.id).remaining());
   var retry=monthly.redeem(redeemInput(b),"staff");assertTrue(retry.alreadyIssued());assertEquals(issued.accessToken(),retry.accessToken());assertEquals(issued.tickets().getFirst().id,retry.tickets().getFirst().id);
   service.checkIn(issued.tickets().getFirst().qrToken,"gate");assertThrows(ResponseStatusException.class,()->service.checkIn(issued.tickets().getFirst().qrToken,"gate"));
   assertTrue(pdf.generate(issued.accessToken()).length>1000);
@@ -63,7 +68,7 @@ class MonthlyIntegrationTest {
  }
  @Test void noGateStockDoesNotConsumeDayOrRecordMeal(){
   var empty=product("Vé hết kho");monthly.save(Tier.PLATINUM,new MonthlyService.PlanInput(empty.id,BigDecimal.valueOf(100),BigDecimal.valueOf(150),true),"admin");
-  var b=sale(Tier.PLATINUM,"2027-01-04");service.cash(b.id,"staff");assertThrows(ResponseStatusException.class,()->monthly.redeem(redeemInput(b),"staff"));assertFalse(monthly.view(b.id).days().getFirst().physicalMealIssued());assertEquals(2,monthly.view(b.id).remaining());
+  var b=sale(Tier.PLATINUM,"2027-01-04");service.cash(b.id,"staff");assertThrows(ResponseStatusException.class,()->monthly.redeem(redeemInput(b),"staff"));assertFalse(monthly.view(b.id).days().getFirst().physicalMealIssued());assertEquals(12,monthly.view(b.id).remaining());
  }
  @Test void sameCardCanBeUsedOnDifferentSelectedDaysWithNewSmileCodes(){
   var b=sale(Tier.GOLD,"2027-01-04","2027-01-05","2027-01-09");service.cash(b.id,"staff");var first=monthly.redeem(redeemInput(b),"staff");clock.instant=Instant.parse("2027-01-05T03:00:00Z");var second=monthly.redeem(redeemInput(b),"staff");assertNotEquals(first.tickets().getFirst().smileBarcode,second.tickets().getFirst().smileBarcode);
@@ -72,7 +77,7 @@ class MonthlyIntegrationTest {
  @Test void snapshotSurvivesPlanEditsAndConcurrentCountersIssueOnlyOnce()throws Exception{
   var b=sale(Tier.GOLD,"2027-01-04");service.cash(b.id,"staff");monthly.save(Tier.GOLD,new MonthlyService.PlanInput(meal.id,BigDecimal.valueOf(900),BigDecimal.valueOf(999),false),"admin");
   var start=new CountDownLatch(1);var pool=Executors.newFixedThreadPool(2);try{
-   Callable<MonthlyService.Issued> task=()->{start.await();return monthly.redeem(redeemInput(b),"staff");};var a=pool.submit(task);var c=pool.submit(task);start.countDown();var one=a.get(15,TimeUnit.SECONDS);var two=c.get(15,TimeUnit.SECONDS);assertEquals(one.accessToken(),two.accessToken());assertEquals("Vé tắm",one.tickets().getFirst().productName);assertEquals(0,bookings.findById(b.id).orElseThrow().total.compareTo(BigDecimal.valueOf(250)));
+   Callable<MonthlyService.Issued> task=()->{start.await();return monthly.redeem(redeemInput(b),"staff");};var a=pool.submit(task);var c=pool.submit(task);start.countDown();var one=a.get(15,TimeUnit.SECONDS);var two=c.get(15,TimeUnit.SECONDS);assertEquals(one.accessToken(),two.accessToken());assertEquals("Vé tắm",one.tickets().getFirst().productName);assertEquals(0,bookings.findById(b.id).orElseThrow().total.compareTo(BigDecimal.valueOf(1400)));
   }finally{pool.shutdownNow();}
  }
  @Test void monthlyPhoneIsRequiredAtSaleAndDisplayedOnCard()throws Exception{
@@ -82,7 +87,7 @@ class MonthlyIntegrationTest {
    mvc.perform(post("/api/staff/monthly/orders").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"tier\":\"GOLD\",\"holderName\":\"Test\",\"phone\":"+value+",\"dates\":[\"2027-01-04\"]}"))
     .andExpect(status().is4xxClientError());
   }
-  var b=monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","+84 (901) 234-567","",List.of(LocalDate.of(2027,1,4),LocalDate.of(2027,1,9))),"staff");
+  var b=monthly.sell(new MonthlyService.SaleInput(Tier.GOLD,"Khách","+84 (901) 234-567","",DEFAULT_DATES.stream().map(LocalDate::parse).toList()),"staff");
   assertEquals("0901234567",monthly.view(b.id).phone());
  }
  @Test void monthlyPdfHasPhoneCorrectMonthBenefitsAndDistinctBackgrounds()throws Exception{
@@ -105,7 +110,7 @@ class MonthlyIntegrationTest {
   var b=sale(Tier.PLATINUM,"2027-01-04");service.cash(b.id,"staff");var token=monthly.view(b.id).qrToken();
   mvc.perform(post("/api/staff/scan").contentType("application/json").content("{\"qrToken\":\""+token+"\"}")).andExpect(status().isForbidden());
   mvc.perform(post("/api/staff/scan").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"qrToken\":\" "+token+" \"}"))
-    .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("MONTHLY_PASS")).andExpect(jsonPath("$.monthlyPass.holderName").value("Khách tháng")).andExpect(jsonPath("$.monthlyPass.remaining").value(2)).andExpect(jsonPath("$.ticket").doesNotExist());
+    .andExpect(status().isOk()).andExpect(jsonPath("$.type").value("MONTHLY_PASS")).andExpect(jsonPath("$.monthlyPass.holderName").value("Khách tháng")).andExpect(jsonPath("$.monthlyPass.remaining").value(12)).andExpect(jsonPath("$.ticket").doesNotExist());
   assertTrue(service.ticketList(b.id).isEmpty());assertFalse(monthly.view(b.id).days().getFirst().physicalMealIssued());
   mvc.perform(post("/api/staff/check-in").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content("{\"qrToken\":\""+token+"\"}")).andExpect(status().isConflict()).andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("thẻ tháng")));
   var issued=monthly.redeem(new MonthlyService.RedeemInput(token,true,true),"staff");var ticket=issued.tickets().getFirst();
@@ -127,11 +132,11 @@ class MonthlyIntegrationTest {
   for(var tier:List.of(Tier.GOLD,Tier.PLATINUM)){
    assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-01-04","2027-01-05"));
    assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-11-24")); // Weekday holiday is not a Saturday/Sunday.
-   var b=rawSale(tier,"2027-01-30","2027-02-01","2027-02-06","2028-01-01");assertEquals(0,b.total.compareTo(BigDecimal.valueOf(550)));
-   service.cash(b.id,"staff");assertEquals(4,monthly.view(b.id).days().size());
+   var b=rawSale(tier,"2027-01-25","2027-01-26","2027-01-27","2027-01-28","2027-01-29","2027-01-30","2027-02-01","2027-02-02","2027-02-03","2027-02-04","2027-02-06","2028-01-01");assertEquals(0,b.total.compareTo(BigDecimal.valueOf(1350)));
+   service.cash(b.id,"staff");assertEquals(12,monthly.view(b.id).days().size());
    try(var document=org.apache.pdfbox.Loader.loadPDF(pdf.generate(b.accessToken))){
     assertEquals(1,document.getNumberOfPages());var text=new org.apache.pdfbox.text.PDFTextStripper().getText(document);
-    for(var date:List.of("tháng 1 - 2027: 30","tháng 2 - 2027: 01, 06","tháng 1 - 2028: 01"))assertTrue(text.contains(date));
+    for(var date:List.of("tháng 1 - 2027: 25, 26, 27, 28, 29, 30","tháng 2 - 2027: 01, 02, 03, 04, 06","tháng 1 - 2028: 01"))assertTrue(text.contains(date));
    }
   }
   var silver=rawSale(Tier.SILVER,"2027-01-25","2027-01-26","2027-01-27","2027-01-28","2027-01-29","2027-02-01","2027-02-02","2027-02-03","2027-02-04","2027-02-05","2027-02-11","2027-02-12");
@@ -139,12 +144,12 @@ class MonthlyIntegrationTest {
  }
  @Test void eachSelectedWeekNeedsItsOwnWeekendIncludingMonthAndYearBoundaries(){
   for(var tier:List.of(Tier.GOLD,Tier.PLATINUM)){
-   assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-01-04","2027-01-09","2027-01-11"));
-   assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-01-30","2027-02-01"));
-   assertThrows(ResponseStatusException.class,()->rawSale(tier,"2027-12-27","2028-01-01","2028-01-03"));
-   assertNotNull(rawSale(tier,"2027-01-04","2027-01-09","2027-01-11","2027-01-17"));
-   assertNotNull(rawSale(tier,"2027-12-27","2028-01-01","2028-01-03","2028-01-08"));
-   assertNotNull(rawSale(tier,"2027-01-09","2027-01-24")); // Empty intervening weeks do not require visits.
+   assertThrows(ResponseStatusException.class,()->rawSale(tier,withDefault("2027-01-18")));
+   assertThrows(ResponseStatusException.class,()->rawSale(tier,withDefault("2027-01-30","2027-02-01")));
+   assertThrows(ResponseStatusException.class,()->rawSale(tier,withDefault("2027-12-27","2028-01-01","2028-01-03")));
+   assertNotNull(rawSale(tier,withDefault()));
+   assertNotNull(rawSale(tier,withDefault("2027-12-27","2028-01-01","2028-01-03","2028-01-08")));
+   assertNotNull(rawSale(tier,withDefault("2027-02-06","2027-02-20"))); // Empty intervening weeks do not require visits.
   }
  }
  @Test void thirtyMonthRowsStillFitOnePageWithoutMissingAnyMonth()throws Exception{
@@ -153,6 +158,18 @@ class MonthlyIntegrationTest {
   try(var doc=org.apache.pdfbox.Loader.loadPDF(pdf.generate(b.accessToken))){
    assertEquals(1,doc.getNumberOfPages());var text=new org.apache.pdfbox.text.PDFTextStripper().getText(doc);
    for(var d:dates)assertTrue(text.contains("tháng "+d.getMonthValue()+" - "+d.getYear()+": "+String.format(Locale.ROOT,"%02d",d.getDayOfMonth())));
+  }
+ }
+ @Test void allTiersRejectElevenDaysAndAcceptTwelveThroughHttp()throws Exception{
+  var mapper=tools.jackson.databind.json.JsonMapper.builder().build();
+  for(var tier:Tier.values()){
+   var chosen=new ArrayList<LocalDate>();
+   if(tier==Tier.SILVER){for(var d=LocalDate.of(2027,1,4);chosen.size()<12;d=d.plusDays(1))if(d.getDayOfWeek().getValue()<=5)chosen.add(d);}
+   else chosen.addAll(DEFAULT_DATES.stream().map(LocalDate::parse).toList());
+   var eleven=new MonthlyService.SaleInput(tier,"Khách","0901234567","",chosen.subList(0,11));
+   assertThrows(ResponseStatusException.class,()->monthly.sell(eleven,"staff"));
+   mvc.perform(post("/api/staff/monthly/orders").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(eleven))).andExpect(status().isConflict());
+   mvc.perform(post("/api/staff/monthly/orders").with(httpBasic("staff","demo-staff-change-me")).with(csrf()).contentType("application/json").content(mapper.writeValueAsString(new MonthlyService.SaleInput(tier,"Khách","0901234567","",chosen)))).andExpect(status().isOk());
   }
  }
  @Test void httpSecurityValidationAndPaidMonthlyDetail()throws Exception{

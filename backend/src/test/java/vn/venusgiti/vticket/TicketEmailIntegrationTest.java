@@ -80,7 +80,9 @@ class TicketEmailIntegrationTest {
     @Test void monthlyBankPaymentSendsOneCardPdfWithTheCorrectQrAndDates()throws Exception {
         var p=new Product();p.code="MONTHMAIL-"+UUID.randomUUID().toString().substring(0,15);p.name="Vé tháng mail";p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(100);p=products.saveAndFlush(p);
         monthly.save(MonthlyDomain.Tier.GOLD,new MonthlyService.PlanInput(p.id,BigDecimal.valueOf(100),BigDecimal.valueOf(150),true),"admin");
-        var b=monthly.sell(new MonthlyService.SaleInput(MonthlyDomain.Tier.GOLD,"Khách tháng","0901234567","monthly@example.test",List.of(date(),date().getDayOfWeek().getValue()>=6?date().plusDays(7):date().with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY)))),"staff");
+        var dates=new ArrayList<LocalDate>();for(int i=0;i<12;i++)dates.add(date().plusDays(i));
+        for(var d:new ArrayList<>(dates))if(d.getDayOfWeek().getValue()<6){var weekend=d.with(java.time.temporal.TemporalAdjusters.nextOrSame(DayOfWeek.SATURDAY));if(!dates.contains(weekend))dates.add(weekend);}
+        var b=monthly.sell(new MonthlyService.SaleInput(MonthlyDomain.Tier.GOLD,"Khách tháng","0901234567","monthly@example.test",dates),"staff");
         assertFalse(jobs.existsById(b.id));new TransactionTemplate(tm).executeWithoutResult(t->bookings.lockId(b.id).orElseThrow().paymentMethod="VIETQR");
         assertTrue(service.tryBankPayment(b.id,"monthly-bank-ref").applied());assertFalse(service.tryBankPayment(b.id,"duplicate-monthly-ref").applied());
         worker.process(b.id);worker.process(b.id);assertEquals("SENT",queue.view(b.id).state());assertEquals(1,smtp.messages.size());assertTrue(service.ticketList(b.id).isEmpty());
