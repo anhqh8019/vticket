@@ -47,7 +47,7 @@ public class TicketPdfService {
     wrap(c,font,pass.holderName(),13,24,493,370,2);
     var matrix=new MultiFormatWriter().encode(pass.qrToken(),BarcodeFormat.QR_CODE,600,600,Map.of(EncodeHintType.MARGIN,4));
     c.drawImage(LosslessFactory.createFromImage(document,MatrixToImageWriter.toBufferedImage(matrix)),120,285,180,180);
-    wrap(c,font,"Vé: "+pass.ticketName()+(pass.mealName()==null?"":" + 1 vé ăn/lần: "+pass.mealName()),11,24,266,370,3);
+    wrap(c,font,"Vé: "+pass.ticketName()+(pass.mealName()==null?"":" + 1 phiếu ăn vật lý mỗi lần đến"),11,24,266,370,3);
     wrap(c,font,"Ngày đăng ký: "+pass.days().stream().map(d->String.format(Locale.ROOT,"%02d",d.date().getDayOfMonth())).reduce((a,b)->a+", "+b).orElse("")+" · tháng "+java.time.YearMonth.from(pass.days().getFirst().date()),11,24,208,370,3);
     text(c,font,10,24,150,"Mỗi ngày đăng ký nhận tối đa 1 lượt vé tại quầy.",Color.DARK_GRAY);
     text(c,font,10,24,130,"Đưa QR thẻ này cho nhân viên VTicket để nhận vé lượt.",Color.DARK_GRAY);

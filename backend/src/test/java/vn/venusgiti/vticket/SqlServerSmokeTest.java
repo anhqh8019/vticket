@@ -30,10 +30,10 @@ class SqlServerSmokeTest {
  @Test void monthlySqlServerSelectedDatesAndIdempotentIssuance()throws Exception{
   var p=new Product();p.code="MONTH-"+UUID.randomUUID().toString().substring(0,20);p.name="Vé tháng SQL";p.kind=Kind.TICKET;p.price=BigDecimal.valueOf(100);products.saveAndFlush(p);
   var date=LocalDate.now(ZoneId.of("Asia/Ho_Chi_Minh"));inventory.createBatch(new BatchInput("MONTH-"+UUID.randomUUID().toString().substring(0,12).toUpperCase(Locale.ROOT),p.id,3,date,date.plusYears(1)),"admin");
-  monthly.save(MonthlyDomain.Tier.GOLD,new MonthlyService.PlanInput(p.id,null,BigDecimal.valueOf(100),BigDecimal.valueOf(150),true),"admin");
+  monthly.save(MonthlyDomain.Tier.GOLD,new MonthlyService.PlanInput(p.id,BigDecimal.valueOf(100),BigDecimal.valueOf(150),true),"admin");
   var dates=new ArrayList<LocalDate>();dates.add(date);if(date.plusDays(1).getMonth()==date.getMonth())dates.add(date.plusDays(1));
   var b=monthly.sell(new MonthlyService.SaleInput(MonthlyDomain.Tier.GOLD,"Khách SQL tháng",null,"",dates),"staff");service.cash(b.id,"staff");assertTrue(pdf.generate(b.accessToken).length>1000);
-  var in=new MonthlyService.RedeemInput(monthly.view(b.id).qrToken(),true);var first=monthly.redeem(in,"staff");assertEquals(1,first.tickets().size());assertEquals(first.accessToken(),monthly.redeem(in,"staff").accessToken());
+  var in=new MonthlyService.RedeemInput(monthly.view(b.id).qrToken(),true,false);var first=monthly.redeem(in,"staff");assertEquals(1,first.tickets().size());assertEquals(first.accessToken(),monthly.redeem(in,"staff").accessToken());assertTrue(pdf.generate(first.accessToken()).length>1000);service.checkIn(first.tickets().getFirst().qrToken,"staff");
  }
 
  @Autowired PaymentIntents paymentIntents; @Autowired VietQrPaymentService payments;

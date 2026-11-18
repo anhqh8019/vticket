@@ -683,6 +683,7 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
               Cập nhật trạng thái
             </button>
           </section>
+          {d.monthlyVisit && <section className="panel"><h2>Vé lượt từ thẻ tháng {d.monthlyVisit.tier}</h2><p>Lượt hôm nay đã được cấp. Xem hoặc in lại vé không tạo lượt mới.</p>{d.monthlyVisit.physicalMealIssued&&<p><b>Đã ghi nhận phát 1 phiếu ăn vật lý cho lượt Platinum này. Không phát thêm khi quét hoặc in lại.</b></p>}</section>}
           {d.monthlyPass && <MonthlyCard pass={d.monthlyPass} token={b.accessToken} busy={busy} run={run} />}
           {tickets.length > 0 && (
             <>

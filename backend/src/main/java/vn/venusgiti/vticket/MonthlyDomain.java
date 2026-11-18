@@ -12,7 +12,6 @@ public final class MonthlyDomain {
  public static class Plan {
   @Id @Enumerated(EnumType.STRING) @Column(length=16) public Tier tier;
   @Column(nullable=false) public Long ticketProductId;
-  public Long mealProductId;
   @Column(nullable=false,precision=18,scale=0) public BigDecimal weekdayPrice;
   @Column(nullable=false,precision=18,scale=0) public BigDecimal weekendPrice;
   @Column(nullable=false) public boolean active;
@@ -23,7 +22,6 @@ public final class MonthlyDomain {
   @com.fasterxml.jackson.annotation.JsonIgnore @Column(nullable=false,unique=true,length=36) public String qrToken;
   @Enumerated(EnumType.STRING) @Column(nullable=false,length=16) public Tier tier;
   @Column(nullable=false) public Long ticketProductId;
-  public Long mealProductId;
   @Column(nullable=false,length=150) public String holderName;
   @Column(nullable=false,length=150) public String ticketName;
   @Column(length=150) public String mealName;
