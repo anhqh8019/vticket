@@ -164,7 +164,7 @@ class MonthlyIntegrationTest {
    assertEquals(org.apache.pdfbox.pdmodel.common.PDRectangle.A5.getHeight(),doc.getPage(0).getMediaBox().getHeight(),0.01f);
    var text=new org.apache.pdfbox.text.PDFTextStripper().getText(doc);assertTrue(text.contains("tháng 1 - 2027:"));assertTrue(text.contains("tháng 2 - 2027: 06, 07"));
    var rows=new HashMap<String,Float>();var monthFontSizes=new HashSet<Float>();
-   var stripper=new org.apache.pdfbox.text.PDFTextStripper(){@Override protected void writeString(String value,List<org.apache.pdfbox.text.TextPosition> positions)throws java.io.IOException{if(!positions.isEmpty()){rows.put(value,positions.getFirst().getYDirAdj());if(value.contains("tháng "))for(var pos:positions)monthFontSizes.add(pos.getFontSizeInPt());}super.writeString(value,positions);}};
+   var stripper=new org.apache.pdfbox.text.PDFTextStripper(){@Override protected void writeString(String value,List<org.apache.pdfbox.text.TextPosition> positions)throws java.io.IOException{if(!positions.isEmpty()){rows.put(value,positions.getFirst().getYDirAdj());if(value.stripLeading().startsWith("tháng "))for(var pos:positions)monthFontSizes.add(pos.getFontSizeInPt());}super.writeString(value,positions);}};
    stripper.getText(doc);assertEquals(1,monthFontSizes.size(),"Các dòng tháng phải có cùng cỡ chữ");
    var schedule=rows.entrySet().stream().filter(e->e.getKey().contains("tháng 2 - 2027")).findFirst().orElseThrow().getValue();
    var instruction=rows.entrySet().stream().filter(e->e.getKey().contains("Mỗi ngày đăng ký")).findFirst().orElseThrow().getValue();
