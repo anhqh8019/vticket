@@ -991,7 +991,7 @@ function CheckIn({ run, busy, open }) {
           <button type="button" disabled={busy} className="secondary scan-reset" title="Xóa mã để kiểm tra vé khác" aria-label="Xóa mã để kiểm tra vé khác" onClick={()=>{
             autoRef.current.cancel();tokenRef.current="";lastCompleted.current=null;T("");R(null);inputRef.current?.focus();
           }}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M20 12a8 8 0 1 0-2.3 5.7M20 7l-3-3"/></svg>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 0 1 15.4-6.4L21 7"/><path d="M21 3v4h-4"/><path d="M21 13a9 9 0 0 1-15.4 6.4L3 17"/><path d="M3 21v-4h4"/></svg>
           </button>
         </div>
         <p className="muted">Quét xong mã QR, hệ thống tự kiểm tra. Bạn vẫn có thể nhấn Enter hoặc nút bên dưới khi nhập mã thủ công.</p>
