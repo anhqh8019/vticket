@@ -978,8 +978,8 @@ function CheckIn({ run, busy, open }) {
   submitRef.current=submitCode;
   useEffect(()=>()=>autoRef.current.cancel(),[]);
   useEffect(()=>{if(!busy){inputRef.current?.focus();inputRef.current?.select();}},[busy]);
-  return <>
-    <section className="panel narrow">
+  return <div className="scan-layout">
+    <section className="panel scan-form">
       <span className="eyebrow">KIỂM SOÁT VÉ</span>
       <h1>Quét vé / thẻ tháng</h1>
       <p>Quét bằng máy đọc QR USB hoặc nhập mã. Vé lượt sẽ ghi nhận check-in trên VTicket; thẻ tháng sẽ mở thông tin để xác nhận cấp vé lượt.</p>
@@ -997,15 +997,17 @@ function CheckIn({ run, busy, open }) {
         <p className="muted">Quét xong mã QR, hệ thống tự kiểm tra. Bạn vẫn có thể nhấn Enter hoặc nút bên dưới khi nhập mã thủ công.</p>
         <button disabled={busy} className="full">Kiểm tra mã</button>
       </form>
-      {result?.type==="TICKET"&&<div className="success">
+      {result?.type==="MONTHLY_PASS"&&<p>Đã nhận diện thẻ tháng. Đối chiếu thông tin khách và xác nhận trong phần kết quả để nhận vé lượt; thao tác quét thẻ chưa trừ lượt.</p>}
+    </section>
+    <div className="scan-result" aria-live="polite">
+      {result?.type==="TICKET"&&<section className="panel success">
         <h3>✓ Check-in vé lượt thành công trên VTicket</h3>
         {result.ticket.productName}<p>{result.ticket.includedServices}</p>
         <small>{new Date(result.ticket.checkedInAt).toLocaleString("vi-VN")}</small>
-      </div>}
-      {result?.type==="MONTHLY_PASS"&&<p>Đã nhận diện thẻ tháng. Đối chiếu thông tin khách và xác nhận bên dưới để nhận vé lượt; thao tác quét thẻ chưa trừ lượt.</p>}
-    </section>
-    {result?.type==="MONTHLY_PASS"&&<MonthlyCard key={result.monthlyPass.bookingId} pass={result.monthlyPass} busy={busy} run={run} open={open}/>}
-  </>;
+      </section>}
+      {result?.type==="MONTHLY_PASS"&&<MonthlyCard key={result.monthlyPass.bookingId} pass={result.monthlyPass} busy={busy} run={run} open={open}/>}
+    </div>
+  </div>;
 }
 function Orders({ run, busy, open }) {
   const [rows, R] = useState([]),
