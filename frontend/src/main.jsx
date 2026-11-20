@@ -984,14 +984,18 @@ function CheckIn({ run, busy, open }) {
       <h1>Quét vé / thẻ tháng</h1>
       <p>Quét bằng máy đọc QR USB hoặc nhập mã. Vé lượt sẽ ghi nhận check-in trên VTicket; thẻ tháng sẽ mở thông tin để xác nhận cấp vé lượt.</p>
       <form onSubmit={e=>{e.preventDefault();submitCode(tokenRef.current);}}>
-        <Field label="Mã QR vé / thẻ tháng" value={token} ref={inputRef} onChange={e=>{
-          const value=e.target.value;tokenRef.current=value;T(value);R(null);autoRef.current.update(value);
-        }} onFocus={e=>e.target.select()} disabled={busy} autoFocus required maxLength={64} autoComplete="off"/>
+        <div className="scan-code-row">
+          <Field label="Mã QR vé / thẻ tháng" value={token} ref={inputRef} onChange={e=>{
+            const value=e.target.value;tokenRef.current=value;T(value);R(null);autoRef.current.update(value);
+          }} onFocus={e=>e.target.select()} disabled={busy} autoFocus required maxLength={64} autoComplete="off"/>
+          <button type="button" disabled={busy} className="secondary scan-reset" title="Xóa mã để kiểm tra vé khác" aria-label="Xóa mã để kiểm tra vé khác" onClick={()=>{
+            autoRef.current.cancel();tokenRef.current="";lastCompleted.current=null;T("");R(null);inputRef.current?.focus();
+          }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 7v5h-5"/><path d="M20 12a8 8 0 1 0-2.3 5.7M20 7l-3-3"/></svg>
+          </button>
+        </div>
         <p className="muted">Quét xong mã QR, hệ thống tự kiểm tra. Bạn vẫn có thể nhấn Enter hoặc nút bên dưới khi nhập mã thủ công.</p>
         <button disabled={busy} className="full">Kiểm tra mã</button>
-        <button type="button" disabled={busy} className="secondary full" onClick={()=>{
-          autoRef.current.cancel();tokenRef.current="";lastCompleted.current=null;T("");R(null);inputRef.current?.focus();
-        }}>Xóa mã / Kiểm tra vé khác</button>
       </form>
       {result?.type==="TICKET"&&<div className="success">
         <h3>✓ Check-in vé lượt thành công trên VTicket</h3>

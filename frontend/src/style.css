@@ -842,3 +842,7 @@ a.button {
 .monthly-card.monthly-silver{background:#f0f2f5;}
 .monthly-card.monthly-gold{background:#fff3d4;}
 .monthly-card.monthly-platinum{background:#e8eff8;}
+
+.scan-code-row{display:flex;align-items:flex-end;gap:8px;margin:14px 0;}
+.scan-code-row>.field{flex:1;min-width:0;margin:0;}
+.scan-code-row .scan-reset{width:42px;height:42px;flex:0 0 42px;padding:0;margin:0;display:grid;place-items:center;}
