@@ -6,6 +6,7 @@ import { createRoot } from "react-dom/client";
 import { api, login, money, today, labels } from "./api";
 import { rememberStaffPage, restoredStaffPage, forgetStaffPage } from "./auth-navigation.js";
 import "./style.css";
+import { createQrAutoSubmit } from "./qr-auto-submit.js";
 import Monthly, { MonthlyCard } from "./monthly.jsx";
 function Field({ label, ...props }) {
   return (
@@ -958,19 +959,33 @@ function OrderView({ d, config, run, busy, refresh, staff, onUpdated }) {
 }
 function CheckIn({ run, busy, open }) {
   const [token, T] = useState(""), [result, R] = useState(null);
+  const inputRef=useRef(null), tokenRef=useRef(""), inFlight=useRef(false), submitRef=useRef(null), autoRef=useRef(null);
+  if(!autoRef.current)autoRef.current=createQrAutoSubmit(code=>submitRef.current?.(code));
+  async function submitCode(value){
+    const code=value.trim();
+    autoRef.current.cancel();
+    if(!code||busy||inFlight.current)return;
+    inFlight.current=true;R(null);
+    try{
+      await run(async()=>{
+        const next=await api("/staff/scan",{method:"POST",body:{qrToken:code}});
+        tokenRef.current="";T("");R(next);
+      });
+    }finally{inFlight.current=false;}
+  }
+  submitRef.current=submitCode;
+  useEffect(()=>()=>autoRef.current.cancel(),[]);
+  useEffect(()=>{if(!busy)inputRef.current?.focus();},[busy]);
   return <>
     <section className="panel narrow">
       <span className="eyebrow">KIỂM SOÁT VÉ</span>
       <h1>Quét vé / thẻ tháng</h1>
       <p>Quét bằng máy đọc QR USB hoặc nhập mã. Vé lượt sẽ ghi nhận check-in trên VTicket; thẻ tháng sẽ mở thông tin để xác nhận cấp vé lượt.</p>
-      <form onSubmit={e=>{
-        e.preventDefault();R(null);
-        run(async()=>{
-          R(await api("/staff/scan",{method:"POST",body:{qrToken:token.trim()}}));
-          T("");
-        });
-      }}>
-        <Field label="Mã QR vé / thẻ tháng" value={token} onChange={e=>{T(e.target.value);R(null);}} autoFocus required maxLength={64}/>
+      <form onSubmit={e=>{e.preventDefault();submitCode(tokenRef.current);}}>
+        <Field label="Mã QR vé / thẻ tháng" value={token} ref={inputRef} onChange={e=>{
+          const value=e.target.value;tokenRef.current=value;T(value);R(null);autoRef.current.update(value);
+        }} disabled={busy} autoFocus required maxLength={64} autoComplete="off"/>
+        <p className="muted">Quét xong mã QR, hệ thống tự kiểm tra. Bạn vẫn có thể nhấn Enter hoặc nút bên dưới khi nhập mã thủ công.</p>
         <button disabled={busy} className="full">Kiểm tra mã</button>
       </form>
       {result?.type==="TICKET"&&<div className="success">
