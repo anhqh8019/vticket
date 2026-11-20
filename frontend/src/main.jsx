@@ -989,6 +989,9 @@ function CheckIn({ run, busy, open }) {
         }} onFocus={e=>e.target.select()} disabled={busy} autoFocus required maxLength={64} autoComplete="off"/>
         <p className="muted">Quét xong mã QR, hệ thống tự kiểm tra. Bạn vẫn có thể nhấn Enter hoặc nút bên dưới khi nhập mã thủ công.</p>
         <button disabled={busy} className="full">Kiểm tra mã</button>
+        <button type="button" disabled={busy} className="secondary full" onClick={()=>{
+          autoRef.current.cancel();tokenRef.current="";lastCompleted.current=null;T("");R(null);inputRef.current?.focus();
+        }}>Xóa mã / Kiểm tra vé khác</button>
       </form>
       {result?.type==="TICKET"&&<div className="success">
         <h3>✓ Check-in vé lượt thành công trên VTicket</h3>
